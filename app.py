@@ -12,13 +12,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed",  # 自動調整のためサイドバーはデフォルトで閉じる
 )
 
-# 2. 画面サイズ最適化（レスポンシブ）＆ ポップデザインのカスタムCSS
+# 2. 画面サイズ最適化（レスポンシブ）＆ ポップデザインのカスタムCSS（文字色固定を追加）
 st.markdown(
     """
     <style>
-    /* 全体の背景色 */
+    /* 全体の背景色と基本文字色 */
     .stApp {
-        background-color: #FFFDE7;
+        background-color: #FFFDE7 !important;
+        color: #212121 !important;
     }
     
     /* コンテナの幅を画面サイズに合わせて自動調整 */
@@ -29,7 +30,7 @@ st.markdown(
         padding-top: 1.5rem;
     }
 
-    /* タイトルエリア（レスポンシブ対応） */
+    /* タイトルエリア */
     .title-box {
         background: linear-gradient(135deg, #FFB74D, #FFD54F);
         padding: 15px 20px;
@@ -39,18 +40,18 @@ st.markdown(
         margin-bottom: 20px;
     }
     .title-box h1 {
-        color: #5D4037;
-        font-size: clamp(18px, 4vw, 26px); /* 画面サイズで文字サイズが自動変化 */
+        color: #5D4037 !important;
+        font-size: clamp(18px, 4vw, 26px);
         margin: 0;
     }
     .title-box p {
-        color: #795548;
+        color: #795548 !important;
         font-size: clamp(12px, 2.5vw, 15px);
         margin-top: 5px;
         font-weight: bold;
     }
 
-    /* メッセージ吹き出し（スマホ・タブレット最適化） */
+    /* メッセージ吹き出し */
     .stChatMessage {
         border-radius: 18px !important;
         padding: 10px 14px !important;
@@ -58,11 +59,18 @@ st.markdown(
         font-size: clamp(14px, 3vw, 16px) !important;
     }
     
+    /* ★文字消え対策：吹き出し内の文字を常に黒・濃いグレーに固定 */
+    .stChatMessage, .stChatMessage p, .stChatMessage span, .stChatMessage div {
+        color: #212121 !important;
+    }
+
+    /* ユーザーのメッセージ（右側風・薄い青） */
     div[data-testid="stChatMessage"]:nth-child(even) {
         background-color: #E1F5FE !important;
         border: 2px solid #81D4FA !important;
     }
 
+    /* AI（ハカセ）のメッセージ（薄い緑） */
     div[data-testid="stChatMessage"]:nth-child(odd) {
         background-color: #E8F5E9 !important;
         border: 2px solid #A5D6A7 !important;
@@ -72,6 +80,9 @@ st.markdown(
     .stChatInputContainer {
         border-radius: 25px !important;
         border: 3px solid #FFB74D !important;
+    }
+    .stChatInputContainer textarea {
+        color: #212121 !important;
     }
     </style>
 """,
@@ -99,7 +110,7 @@ with st.sidebar:
         "OpenAI APIキーを入力", type="password", help="sk-...を入力"
     )
   else:
-    st.success("鍵 APIキーは自動で読み込まれています！")
+    st.success("🗝️ APIキーは自動で読み込まれています！")
   st.divider()
   st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
