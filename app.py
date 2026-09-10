@@ -6,13 +6,17 @@ import streamlit as st
 
 # 1. ページ基本設定
 st.set_page_config(
-    page_title="社会×理科 わくわく探検チャット",
+    page_title="わくわく理科探検チャット",
     page_icon="🎨",
     layout="centered",
-    initial_sidebar_state="collapsed",  # 自動調整のためサイドバーはデフォルトで閉じる
+    initial_sidebar_state="collapsed",
 )
 
-# 2. 画面サイズ最適化（レスポンシブ）＆ ポップデザインのカスタムCSS（文字色固定を追加）
+# 2. セッション状態（入力文字数）の初期化
+if "total_chars" not in st.session_state:
+  st.session_state.total_chars = 0
+
+# 3. 画面サイズ最適化 & ポップデザインのカスタムCSS
 st.markdown(
     """
     <style>
@@ -22,12 +26,11 @@ st.markdown(
         color: #212121 !important;
     }
     
-    /* コンテナの幅を画面サイズに合わせて自動調整 */
     .main .block-container {
         max-width: 800px;
         padding-left: 1rem;
         padding-right: 1rem;
-        padding-top: 1.5rem;
+        padding-top: 1rem;
     }
 
     /* タイトルエリア */
@@ -37,7 +40,7 @@ st.markdown(
         border-radius: 20px;
         text-align: center;
         box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
+        margin-bottom: 10px;
     }
     .title-box h1 {
         color: #5D4037 !important;
@@ -51,6 +54,20 @@ st.markdown(
         font-weight: bold;
     }
 
+    /* 探検レベルバー */
+    .status-bar {
+        background-color: #FFFFFF;
+        border: 2px solid #FFCA28;
+        border-radius: 15px;
+        padding: 8px 15px;
+        text-align: center;
+        font-weight: bold;
+        color: #5D4037;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        font-size: clamp(13px, 3vw, 16px);
+    }
+
     /* メッセージ吹き出し */
     .stChatMessage {
         border-radius: 18px !important;
@@ -59,24 +76,30 @@ st.markdown(
         font-size: clamp(14px, 3vw, 16px) !important;
     }
     
-    /* ★文字消え対策：吹き出し内の文字を常に黒・濃いグレーに固定 */
     .stChatMessage, .stChatMessage p, .stChatMessage span, .stChatMessage div {
         color: #212121 !important;
     }
 
-    /* ユーザーのメッセージ（右側風・薄い青） */
+    /* ふりがな（ルビ）の装飾 */
+    rt {
+        font-size: 0.65em;
+        color: #E65100;
+        font-weight: bold;
+    }
+
+    /* ユーザーメッセージ（右側風） */
     div[data-testid="stChatMessage"]:nth-child(even) {
         background-color: #E1F5FE !important;
         border: 2px solid #81D4FA !important;
     }
 
-    /* AI（ハカセ）のメッセージ（薄い緑） */
+    /* AIメッセージ */
     div[data-testid="stChatMessage"]:nth-child(odd) {
         background-color: #E8F5E9 !important;
         border: 2px solid #A5D6A7 !important;
     }
 
-    /* 入力フォームの画面最適化 */
+    /* 入力フォーム */
     .stChatInputContainer {
         border-radius: 25px !important;
         border: 3px solid #FFB74D !important;
@@ -93,14 +116,25 @@ st.markdown(
 st.markdown(
     """
     <div class="title-box">
-        <h1>🔍 社会×理科 わくわく探検チャット 🎓</h1>
-        <p>タイピングで ハカセと 楽しく おしゃべりしよう！</p>
+        <h1>🔍 わくわく理科探検チャット 🎓</h1>
+        <p>ハカセと いっしょに ふしぎを はっけんしよう！</p>
     </div>
 """,
     unsafe_allow_html=True,
 )
 
-# 3. APIキーの自動取得（secrets.toml または 手入力）
+# 探検レベル・入力文字数表示
+level = (st.session_state.total_chars // 30) + 1
+st.markdown(
+    f"""
+    <div class="status-bar">
+        ⭐ おしゃべりした文字数: <b>{st.session_state.total_chars}</b> もじ ｜ 🏆 たんけんレベル: <b>Lv.{level}</b>
+    </div>
+""",
+    unsafe_allow_html=True,
+)
+
+# 4. APIキーの自動取得
 api_key = st.secrets.get("OPENAI_API_KEY", "")
 
 with st.sidebar:
@@ -114,55 +148,76 @@ with st.sidebar:
   st.divider()
   st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
-# 4. システムプロンプト
+# 5. システムプロンプト（汎用的な小学3年生向けに改善）
 SYSTEM_PROMPT = """
-あなたは小学3年生の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
-相手はタイピングが得意で、社会科が好きですが、理科に苦手意識がある小学3年生です。
+あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
+相手は小学3年生の児童です。身近な自然や科学の不思議に興味を持てるよう優しく対話します。
 
-【重要：会話を長続きさせるためのルール】
-1. 【表記・言葉遣い】
-   - 小学3年生が読める漢字中心、難しい言葉には「（ルビ）」を付ける。
+【重要：ふりがな（ルビ）の付け方】
+- 小学3年生で習わない漢字や難しそうな言葉には、必ずHTMLのルビタグを使ってふりがなを振ってください。
+- 書き方例: <ruby>探検<rt>たんけん</rt></ruby>、<ruby>実験<rt>じっけん</rt></ruby>、<ruby>太陽<rt>たいよう</rt></ruby>、<ruby>観察<rt>かんさつ</rt></ruby>
+
+【会話を長続きさせるためのルール】
+1. 【言葉遣い】
    - 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
    - 1回の返信は100〜150文字程度でコンパクトにする。
 
-2. 【会話の展開フロー（社会から理科へ）】
-   - ① 児童の入力をしっかり褒める（タイピングの頑張りを評価）。
-   - ② 「社会（地域、食べ物、都道府県、昔のくらしなど）」から「理科（天気、季節、生き物、水、太陽など）」へ自然に繋げる。
-   - ③ 必ず『具体的に答えやすい質問』で終わる（例：「どっちが好きかな？」「〜見たことある？」など）。
+2. 【会話の展開フロー】
+   - ① 児童の返信をしっかり褒める（発想や入力を評価）。
+   - ② 身近な疑問や体験（天気、生き物、光、音、磁石など理科の要素）へ自然に繋げる。
+   - ③ 必ず『具体的に答えやすい質問』で終わる（例：「どっちだと思う？」「〜を見たことある？」など）。
 
 3. 【会話を終わらせない工夫】
-   - 児童が「わからない」「忘れた」と答えたら、優しくヒント（選択肢など）を出して助ける。
+   - 児童が「わからない」「忘れた」と答えたら、優しくヒント（2〜3個の選択肢など）を出して助ける。
 """
 
-# 5. 会話履歴の初期化
+# 6. 会話履歴の初期化
 if "messages" not in st.session_state:
   st.session_state.messages = [
       {"role": "system", "content": SYSTEM_PROMPT},
       {
           "role": "assistant",
           "content": (
-              "こんにちは！探検ハカセだよ🎓\nきみの得意なタイピングで、一緒に探検に出かけよう！\n\n【きょうのミッション1】\n最近、学校の社会や本で知った「すきな場所」や「行ってみたい都道府県」はあるかな？キーボードで打って教えてね！"
+              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける探検に出かけよう！\n\n【きょうのミッション1】\n最近、家の近くや学校で見かけた「すきな生き物」や「気になる天気」はあるかな？文字で打って教えてね！"
           ),
       },
   ]
 
-# 6. 会話の表示
+# 7. 会話の表示
 for msg in st.session_state.messages:
   if msg["role"] != "system":
     avatar = "🎓" if msg["role"] == "assistant" else "👦"
     with st.chat_message(msg["role"], avatar=avatar):
-      st.write(msg["content"])
+      st.markdown(msg["content"], unsafe_allow_html=True)
 
-# 7. タイピング入力処理
-if user_input := st.chat_input("ここにタイピングして返事をかこう！"):
+# 入力補助ボタン（たすけぶね）
+st.caption("💬 たすけぶねボタン（おすと すぐに へんじができるよ）:")
+col1, col2, col3 = st.columns(3)
+preset_input = None
+if col1.button("💡 ヒントちょうだい！"):
+  preset_input = "ヒントをちょうだい！"
+if col2.button("❓ つぎのミッション！"):
+  preset_input = "つぎのミッションをだして！"
+if col3.button("😅 ちょっとわからない"):
+  preset_input = "ちょっとわからないから教えて！"
+
+# 8. 入力処理
+user_input = st.chat_input("ここに返事をかこう！")
+if preset_input:
+  user_input = preset_input
+
+if user_input:
   if not api_key:
     st.error(
         "👈 ひだりの「せってい」に OpenAI APIキー を入れてからおくってね！"
     )
   else:
+    # 文字数カウントを加算
+    st.session_state.total_chars += len(user_input)
+
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user", avatar="👦"):
-      st.write(user_input)
+      st.markdown(user_input, unsafe_allow_html=True)
 
     try:
       client = openai.OpenAI(api_key=api_key)
@@ -172,7 +227,7 @@ if user_input := st.chat_input("ここにタイピングして返事をかこう
               model="gpt-4o-mini", messages=st.session_state.messages
           )
           bot_reply = response.choices[0].message.content
-          st.write(bot_reply)
+          st.markdown(bot_reply, unsafe_allow_html=True)
 
       st.session_state.messages.append(
           {"role": "assistant", "content": bot_reply}
@@ -184,6 +239,7 @@ if user_input := st.chat_input("ここにタイピングして返事をかこう
           "user_input": user_input,
           "bot_response": bot_reply,
           "input_length": len(user_input),
+          "total_chars": st.session_state.total_chars,
       }])
       log_file = "chat_log.csv"
       file_exists = os.path.exists(log_file)
@@ -194,6 +250,8 @@ if user_input := st.chat_input("ここにタイピングして返事をかこう
           header=not file_exists,
           encoding="utf-8-sig",
       )
+
+      st.rerun()
 
     except Exception as e:
       st.error(f"エラーが発生しました: {e}")
