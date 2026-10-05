@@ -17,18 +17,22 @@ st.set_page_config(
 
 # 2. セッション状態の初期化
 if "total_chars" not in st.session_state:
-  st.session_state.total_chars = 0
+    st.session_state.total_chars = 0
+
+# 写真枠の自動リセット用キー
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
 
 # 画像を軽量化（リサイズ・圧縮）してbase64形式に変換する関数
 def encode_image(image_bytes):
-  img = Image.open(io.BytesIO(image_bytes))
-  if img.mode in ("RGBA", "P"):
-    img = img.convert("RGB")
-  img.thumbnail((800, 800))  # 最大サイズを800pxにリサイズして軽量化
-  buffered = io.BytesIO()
-  img.save(buffered, format="JPEG", quality=70)  # 画質70%で圧縮
-  return base64.b64encode(buffered.getvalue()).decode("utf-8")
+    img = Image.open(io.BytesIO(image_bytes))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+    img.thumbnail((800, 800))  # 最大サイズを800pxにリサイズして軽量化
+    buffered = io.BytesIO()
+    img.save(buffered, format="JPEG", quality=70)  # 画質70%で圧縮
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
 # 3. 画面サイズ最適化 & ポップデザインのカスタムCSS
@@ -136,15 +140,15 @@ st.markdown(
 api_key = st.secrets.get("OPENAI_API_KEY", "")
 
 with st.sidebar:
-  st.header("⚙️ せってい")
-  if not api_key:
-    api_key = st.text_input(
-        "OpenAI APIキーを入力", type="password", help="sk-...を入力"
-    )
-  else:
-    st.success("🗝️ APIキーは自動で読み込まれています！")
-  st.divider()
-  st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
+    st.header("⚙️ せってい")
+    if not api_key:
+        api_key = st.text_input(
+            "OpenAI APIキーを入力", type="password", help="sk-...を入力"
+        )
+    else:
+        st.success("🗝️ APIキーは自動で読み込まれています！")
+    st.divider()
+    st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
 # 5. システムプロンプト
 SYSTEM_PROMPT = """
@@ -169,29 +173,30 @@ SYSTEM_PROMPT = """
 
 # 6. 会話履歴の初期化
 if "messages" not in st.session_state:
-  st.session_state.messages = [
-      {"role": "system", "content": SYSTEM_PROMPT},
-      {
-          "role": "assistant",
-          "content": (
-              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション1】\n育てているお花や、気になった葉っぱ・生き物の「写真」があったら送ってみてね！文字でのお返事も大歓迎だよ！"
-          ),
-      },
-  ]
+    st.session_state.messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "assistant",
+            "content": (
+                "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション1】\n育てているお花や、気になった葉っぱ・生き物の「写真」があったら送ってみてね！文字でのお返事も大歓迎だよ！"
+            ),
+        },
+    ]
 
 # 7. 会話の表示
 for msg in st.session_state.messages:
-  if msg["role"] != "system":
-    avatar = "🎓" if msg["role"] == "assistant" else "👦"
-    with st.chat_message(msg["role"], avatar=avatar):
-      if "image" in msg and msg["image"]:
-        st.image(msg["image"], use_container_width=True)
-      st.markdown(msg["content"], unsafe_allow_html=True)
+    if msg["role"] != "system":
+        avatar = "🎓" if msg["role"] == "assistant" else "👦"
+        with st.chat_message(msg["role"], avatar=avatar):
+            if "image" in msg and msg["image"]:
+                st.image(msg["image"], use_container_width=True)
+            st.markdown(msg["content"], unsafe_allow_html=True)
 
-# 写真アップロードエリア
+# 写真アップロードエリア（keyを自動変更して送信後にリセット）
 uploaded_file = st.file_uploader(
     "📷 しゃしんを おくる（クリックして えらぶ / パシャリと とる）",
     type=["jpg", "jpeg", "png"],
+    key=f"uploader_{st.session_state.uploader_key}",
 )
 
 # 入力補助ボタン（たすけぶね）
@@ -199,101 +204,103 @@ st.caption("💬 たすけぶねボタン（おすと すぐに へんじが で
 col1, col2, col3 = st.columns(3)
 preset_input = None
 if col1.button("💡 ヒントちょうだい！"):
-  preset_input = "ヒントをちょうだい！"
+    preset_input = "ヒントをちょうだい！"
 if col2.button("❓ つぎのミッション！"):
-  preset_input = "つぎのミッションをだして！"
+    preset_input = "つぎのミッションをだして！"
 if col3.button("🌱 この植物元気かな？"):
-  preset_input = "写真の植物（しょくぶつ）が元気かどうか教えて！"
+    preset_input = "写真の植物（しょくぶつ）が元気かどうか教えて！"
 
 # 8. 入力処理
 user_input = st.chat_input("ここに へんじを かこう！")
 if preset_input:
-  user_input = preset_input
+    user_input = preset_input
 
 if user_input or uploaded_file:
-  if not api_key:
-    st.error(
-        "👈 ひだりの「せってい」に OpenAI APIキー を入れてからおくってね！"
-    )
-  else:
-    text_content = user_input if user_input else "しゃしんを おくったよ！"
-    st.session_state.total_chars += len(text_content)
+    if not api_key:
+        st.error(
+            "👈 ひだりの「せってい」に OpenAI APIキー を入れてからおくってね！"
+        )
+    else:
+        text_content = user_input if user_input else "しゃしんを おくったよ！"
+        st.session_state.total_chars += len(text_content)
 
-    api_content = []
-    api_content.append({"type": "text", "text": text_content})
+        api_content = []
+        api_content.append({"type": "text", "text": text_content})
 
-    image_data = None
-    if uploaded_file:
-      image_data = uploaded_file.getvalue()
-      base64_img = encode_image(image_data)
-      api_content.append({
-          "type": "image_url",
-          "image_url": {
-              "url": f"data:image/jpeg;base64,{base64_img}",
-              "detail": "low",  # トークン消費量を低減する設定
-          },
-      })
+        image_data = None
+        if uploaded_file:
+            image_data = uploaded_file.getvalue()
+            base64_img = encode_image(image_data)
+            api_content.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64_img}",
+                    "detail": "low",
+                },
+            })
 
-    user_msg = {
-        "role": "user",
-        "content": text_content,
-        "image": image_data,
-        "api_content": api_content,
-    }
-    st.session_state.messages.append(user_msg)
+        user_msg = {
+            "role": "user",
+            "content": text_content,
+            "image": image_data,
+            "api_content": api_content,
+        }
+        st.session_state.messages.append(user_msg)
 
-    # API送信用のメッセージ組み立て（データ軽量化のため直近8件に制限）
-    system_msg = [m for m in st.session_state.messages if m["role"] == "system"]
-    other_msgs = [m for m in st.session_state.messages if m["role"] != "system"]
-    recent_msgs = other_msgs[-8:]
+        # API送信用のメッセージ組み立て（直近8件）
+        system_msg = [m for m in st.session_state.messages if m["role"] == "system"]
+        other_msgs = [m for m in st.session_state.messages if m["role"] != "system"]
+        recent_msgs = other_msgs[-8:]
 
-    api_messages = []
-    for m in system_msg:
-      api_messages.append({"role": "system", "content": m["content"]})
-    for m in recent_msgs:
-      if m["role"] == "user":
-        content_to_send = m.get("api_content", m["content"])
-        api_messages.append({"role": "user", "content": content_to_send})
-      elif m["role"] == "assistant":
-        api_messages.append({"role": "assistant", "content": m["content"]})
+        api_messages = []
+        for m in system_msg:
+            api_messages.append({"role": "system", "content": m["content"]})
+        for m in recent_msgs:
+            if m["role"] == "user":
+                content_to_send = m.get("api_content", m["content"])
+                api_messages.append({"role": "user", "content": content_to_send})
+            elif m["role"] == "assistant":
+                api_messages.append({"role": "assistant", "content": m["content"]})
 
-    try:
-      client = openai.OpenAI(api_key=api_key)
-      with st.chat_message("assistant", avatar="🎓"):
-        with st.spinner("ハカセが しゃしんを かんさつ中..."):
-          response = client.chat.completions.create(
-              model="gpt-4o-mini", messages=api_messages
-          )
-          bot_reply = response.choices[0].message.content
-          st.markdown(bot_reply, unsafe_allow_html=True)
+        try:
+            client = openai.OpenAI(api_key=api_key)
+            with st.chat_message("assistant", avatar="🎓"):
+                with st.spinner("ハカセが しゃしんを かんさつ中..."):
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini", messages=api_messages
+                    )
+                    bot_reply = response.choices[0].message.content
+                    st.markdown(bot_reply, unsafe_allow_html=True)
 
-      st.session_state.messages.append(
-          {"role": "assistant", "content": bot_reply}
-      )
+            st.session_state.messages.append(
+                {"role": "assistant", "content": bot_reply}
+            )
 
-      # ログの自動保存
-      log_df = pd.DataFrame([{
-          "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-          "user_input": text_content,
-          "has_image": True if uploaded_file else False,
-          "bot_response": bot_reply,
-          "total_chars": st.session_state.total_chars,
-      }])
-      log_file = "chat_log.csv"
-      file_exists = os.path.exists(log_file)
-      log_df.to_csv(
-          log_file,
-          mode="a",
-          index=False,
-          header=not file_exists,
-          encoding="utf-8-sig",
-      )
+            # ログの自動保存
+            log_df = pd.DataFrame([{
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "user_input": text_content,
+                "has_image": True if uploaded_file else False,
+                "bot_response": bot_reply,
+                "total_chars": st.session_state.total_chars,
+            }])
+            log_file = "chat_log.csv"
+            file_exists = os.path.exists(log_file)
+            log_df.to_csv(
+                log_file,
+                mode="a",
+                index=False,
+                header=not file_exists,
+                encoding="utf-8-sig",
+            )
 
-      st.rerun()
+            # 送信成功後、写真欄をクリア（キー切り替え）
+            st.session_state.uploader_key += 1
+            st.rerun()
 
-    except openai.RateLimitError:
-      st.warning(
-          "⌛ ハカセが考えすぎて少し疲れちゃったみたい！5秒くらい待ってから、もう一度送ってみてね！"
-      )
-    except Exception as e:
-      st.error(f"エラーが発生しました: {e}")
+        except openai.RateLimitError:
+            st.warning(
+                "⌛ ハカセが考えすぎて少し疲れちゃったみたい！5秒くらい待ってから、もう一度送ってみてね！"
+            )
+        except Exception as e:
+            st.error(f"エラーが発生しました: {e}")
