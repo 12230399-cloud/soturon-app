@@ -23,12 +23,12 @@ if "uploader_key" not in st.session_state:
   st.session_state.uploader_key = 0
 
 
-# 魚などの識別精度を高めるため、画質・解像度を確保してbase64変換する関数
+# 写真などの識別精度を高めるため、画質・解像度を確保してbase64変換する関数
 def encode_image(image_bytes):
   img = Image.open(io.BytesIO(image_bytes))
   if img.mode in ("RGBA", "P"):
     img = img.convert("RGB")
-  img.thumbnail((1024, 1024))  # 魚の特徴が読める解像度を保持
+  img.thumbnail((1024, 1024))  # 特徴が読める解像度を保持
   buffered = io.BytesIO()
   img.save(buffered, format="JPEG", quality=85)
   return base64.b64encode(buffered.getvalue()).decode("utf-8")
@@ -149,25 +149,28 @@ with st.sidebar:
   st.divider()
   st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
-# 5. システムプロンプト（魚や生き物の特定ルールを追加）
+# 5. システムプロンプト（あらゆる写真や日常の質問に対応）
 SYSTEM_PROMPT = """
 あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
-相手は小学3年生の児童です。身近な自然や理科の不思議に興味を持てるよう優しく対話します。
+相手は小学3年生の児童です。身近な自然や生き物、日常の理科の不思議に興味を持てるよう優しく対話します。
 
 【写真（画像）が送られてきた場合ルール】
-1. 写真に写っているもの（魚、生き物、昆虫、植物、空など）の形・色・模様などの特徴をよく観察し、名前や種類（例：「〇〇という魚だね！」「〇〇の葉っぱかな？」）を特定・推測して教えてあげてください。
-2. 魚や生き物の場合は、ヒレや体模様の特徴を教えてあげながら、どんな場所で暮らしているかなどの面白ポイントを説明してください。
-3. もし元気がない状態なら、理由とお世話のしかたを優しく教えてあげてください。
+1. 写真に写っているもの（生き物、虫、魚、植物、空、身の回りのものなど）の形・色・特徴をよく観察し、名前や種類、分類などを特定・推測して分かりやすく教えてあげてください。
+2. 観察したポイントや、それにまつわる面白くてためになる理科の豆知識を解説してください。
+3. 元気がない植物や生き物の写真の場合、優しく理由やお世話のアドバイスを教えてあげてください。
+
+【文字だけで質問が来た場合】
+理科の疑問や日常の「なんで？」に対して、小学3年生に分かりやすい言葉で親身に答えてください。
 
 【重要：言葉遣いと漢字の制限】
 - 原則として「小学1年生〜3年生で習う漢字」のみを使用してください。
 - 4年生以上で習う難しい漢字や専門用語は使わず、ひらがなにするかルビタグを使ってふりがなを振ってください。
-- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>魚<rt>さかな</rt></ruby>、<ruby>特徴<rt>とくちょう</rt></ruby>
+- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>不思議<rt>ふしぎ</rt></ruby>、<ruby>特徴<rt>とくちょう</rt></ruby>
 
 【会話を長続きさせるためのルール】
 1. 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
 2. 返信は100〜150文字程度でコンパクトにする。
-3. 必ず『具体的に答えやすい質問』で終わる（例：「どこで見つけた魚かな？」「泳ぐのははやかったかな？」など）。
+3. 必ず『具体的に答えやすい質問』で終わる（例：「どこで見つけたのかな？」「色は何色に見える？」など）。
 """
 
 # 6. 会話履歴の初期化
@@ -177,7 +180,7 @@ if "messages" not in st.session_state:
       {
           "role": "assistant",
           "content": (
-              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション】\nつかまえた魚や生き物、気になった植物の「写真」があったら送ってみてね！質問もいっしょに書けるよ！"
+              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション】\n気になったものや生き物の「写真」を送ったり、知りたいことを自分で文字で自由に打って送ってみてね！"
           ),
       },
   ]
@@ -193,7 +196,7 @@ for msg in st.session_state.messages:
 
 # 写真アップロードエリア
 uploaded_file = st.file_uploader(
-    "📷 しゃしんを えらぶ（クリックして えらぶ / パシャリと とる）",
+    "📷 しゃしんを えらぶ（選んだあと、下に文章を打ってね）",
     type=["jpg", "jpeg", "png"],
     key=f"uploader_{st.session_state.uploader_key}",
 )
@@ -201,22 +204,22 @@ uploaded_file = st.file_uploader(
 # 写真が選択されている場合の案内表示
 if uploaded_file:
   st.info(
-      "📌 写真がセットされました！下の入力欄に「この魚の名前は？」などメッセージを入れて送信してね！"
+      "📌 写真がえらばれました！一番下のメッセージ入力欄に、聞きたいことを自分の言葉で書いて送信してね！"
   )
 
 # 入力補助ボタン（たすけぶね）
-st.caption("💬 たすけぶねボタン（おすと すぐに へんじが できるよ）:")
+st.caption("💬 たすけぶねボタン（文字を打つのがむずかしい時に使ってね）:")
 col1, col2, col3 = st.columns(3)
 preset_input = None
 if col1.button("💡 ヒントちょうだい！"):
   preset_input = "ヒントをちょうだい！"
 if col2.button("❓ つぎのミッション！"):
   preset_input = "つぎのミッションをだして！"
-if col3.button("🐟 このお魚なにかな？"):
-  preset_input = "写真のお魚（さかな）の名前や特徴（とくちょう）を教えて！"
+if col3.button("🔍 これ なにか教えて！"):
+  preset_input = "これ（写真や疑問）について詳しく教えて！"
 
-# 8. 入力処理
-user_input = st.chat_input("ここに へんじを かこう！")
+# 8. 入力処理（ユーザーが自由に文字を打ち込める欄）
+user_input = st.chat_input("ここに 自由にしつもんや へんじを かこう！")
 if preset_input:
   user_input = preset_input
 
@@ -242,7 +245,7 @@ if user_input or uploaded_file:
           "type": "image_url",
           "image_url": {
               "url": f"data:image/jpeg;base64,{base64_img}",
-              "detail": "high",  # 魚のヒレや模様の特定精度を高める高解像度モード
+              "detail": "high",  # 詳細な画像分析
           },
       })
 
@@ -272,7 +275,7 @@ if user_input or uploaded_file:
     try:
       client = openai.OpenAI(api_key=api_key)
       with st.chat_message("assistant", avatar="🎓"):
-        with st.spinner("ハカセが しゃしんを かんさつ中..."):
+        with st.spinner("ハカセが かんさつ・考え中..."):
           response = client.chat.completions.create(
               model="gpt-4o-mini", messages=api_messages
           )
