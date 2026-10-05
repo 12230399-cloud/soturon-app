@@ -1,11 +1,11 @@
-base64
-datetime
-io
-os
-openai
-pandas
-PIL Image
-streamlit
+import base64
+from datetime import datetime
+import io
+import os
+import openai
+import pandas as pd
+from PIL import Image
+import streamlit as st
 
 # 1. ページ基本設定
 st.set_page_config(
