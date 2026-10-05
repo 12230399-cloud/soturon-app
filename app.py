@@ -18,9 +18,9 @@ if "total_chars" not in st.session_state:
   st.session_state.total_chars = 0
 
 
-# 画像をbase64形式に変換する関数
+# 画像（バイナリデータ）をbase64形式に変換する関数（修正済み）
 def encode_image(image_bytes):
-  return base64.b64encode(image_bytes).read().decode("utf-8")
+  return base64.b64encode(image_bytes).decode("utf-8")
 
 
 # 3. 画面サイズ最適化 & ポップデザインのカスタムCSS
@@ -138,7 +138,7 @@ with st.sidebar:
   st.divider()
   st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
-# 5. システムプロンプト（画像認識・植物病気診断ルールを追加）
+# 5. システムプロンプト
 SYSTEM_PROMPT = """
 あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
 相手は小学3年生の児童です。身近な自然や理科の不思議に興味を持てるよう優しく対話します。
@@ -176,7 +176,6 @@ for msg in st.session_state.messages:
   if msg["role"] != "system":
     avatar = "🎓" if msg["role"] == "assistant" else "👦"
     with st.chat_message(msg["role"], avatar=avatar):
-      # 画像があれば表示
       if "image" in msg and msg["image"]:
         st.image(msg["image"], use_container_width=True)
       st.markdown(msg["content"], unsafe_allow_html=True)
@@ -210,24 +209,21 @@ if user_input or uploaded_file:
         "👈 ひだりの「せってい」に OpenAI APIキー を入れてからおくってね！"
     )
   else:
-    # 入力テキストがない場合はデフォルト文章を設定
     text_content = user_input if user_input else "しゃしんを おくったよ！"
     st.session_state.total_chars += len(text_content)
 
-    # API送信用のメッセージコンテンツを作成
     api_content = []
     api_content.append({"type": "text", "text": text_content})
 
     image_data = None
     if uploaded_file:
       image_data = uploaded_file.getvalue()
-      base64_img = encode_image(uploaded_file)
+      base64_img = encode_image(image_data)  # 修正箇所
       api_content.append({
           "type": "image_url",
           "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"},
       })
 
-    # ユーザー発言を履歴に追加
     user_msg = {
         "role": "user",
         "content": text_content,
@@ -236,13 +232,12 @@ if user_input or uploaded_file:
     }
     st.session_state.messages.append(user_msg)
 
-    # OpenAI APIへ送信する会話形式の組み立て
+    # API送信用のメッセージの組み立て
     api_messages = []
     for m in st.session_state.messages:
       if m["role"] == "system":
         api_messages.append({"role": "system", "content": m["content"]})
       elif m["role"] == "user":
-        # 画像付きの場合は api_content、文字のみの場合は content を送る
         content_to_send = m.get("api_content", m["content"])
         api_messages.append({"role": "user", "content": content_to_send})
       elif m["role"] == "assistant":
