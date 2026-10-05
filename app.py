@@ -1,9 +1,11 @@
-import base64
-from datetime import datetime
-import os
-import openai
-import pandas as pd
-import streamlit as st
+base64
+datetime
+io
+os
+openai
+pandas
+PIL Image
+streamlit
 
 # 1. ページ基本設定
 st.set_page_config(
@@ -18,9 +20,15 @@ if "total_chars" not in st.session_state:
   st.session_state.total_chars = 0
 
 
-# 画像（バイナリデータ）をbase64形式に変換する関数（修正済み）
+# 画像を軽量化（リサイズ・圧縮）してbase64形式に変換する関数
 def encode_image(image_bytes):
-  return base64.b64encode(image_bytes).decode("utf-8")
+  img = Image.open(io.BytesIO(image_bytes))
+  if img.mode in ("RGBA", "P"):
+    img = img.convert("RGB")
+  img.thumbnail((800, 800))  # 最大サイズを800pxにリサイズして軽量化
+  buffered = io.BytesIO()
+  img.save(buffered, format="JPEG", quality=70)  # 画質70%で圧縮
+  return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 
 # 3. 画面サイズ最適化 & ポップデザインのカスタムCSS
@@ -180,7 +188,7 @@ for msg in st.session_state.messages:
         st.image(msg["image"], use_container_width=True)
       st.markdown(msg["content"], unsafe_allow_html=True)
 
-# 写真アップロード（カメラ/ファイル選択）エリア
+# 写真アップロードエリア
 uploaded_file = st.file_uploader(
     "📷 しゃしんを おくる（クリックして えらぶ / パシャリと とる）",
     type=["jpg", "jpeg", "png"],
@@ -202,7 +210,6 @@ user_input = st.chat_input("ここに へんじを かこう！")
 if preset_input:
   user_input = preset_input
 
-# 写真または文字が入力された場合
 if user_input or uploaded_file:
   if not api_key:
     st.error(
@@ -218,10 +225,13 @@ if user_input or uploaded_file:
     image_data = None
     if uploaded_file:
       image_data = uploaded_file.getvalue()
-      base64_img = encode_image(image_data)  # 修正箇所
+      base64_img = encode_image(image_data)
       api_content.append({
           "type": "image_url",
-          "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"},
+          "image_url": {
+              "url": f"data:image/jpeg;base64,{base64_img}",
+              "detail": "low",  # トークン消費量を低減する設定
+          },
       })
 
     user_msg = {
@@ -232,12 +242,16 @@ if user_input or uploaded_file:
     }
     st.session_state.messages.append(user_msg)
 
-    # API送信用のメッセージの組み立て
+    # API送信用のメッセージ組み立て（データ軽量化のため直近8件に制限）
+    system_msg = [m for m in st.session_state.messages if m["role"] == "system"]
+    other_msgs = [m for m in st.session_state.messages if m["role"] != "system"]
+    recent_msgs = other_msgs[-8:]
+
     api_messages = []
-    for m in st.session_state.messages:
-      if m["role"] == "system":
-        api_messages.append({"role": "system", "content": m["content"]})
-      elif m["role"] == "user":
+    for m in system_msg:
+      api_messages.append({"role": "system", "content": m["content"]})
+    for m in recent_msgs:
+      if m["role"] == "user":
         content_to_send = m.get("api_content", m["content"])
         api_messages.append({"role": "user", "content": content_to_send})
       elif m["role"] == "assistant":
@@ -277,5 +291,9 @@ if user_input or uploaded_file:
 
       st.rerun()
 
+    except openai.RateLimitError:
+      st.warning(
+          "⌛ ハカセが考えすぎて少し疲れちゃったみたい！5秒くらい待ってから、もう一度送ってみてね！"
+      )
     except Exception as e:
       st.error(f"エラーが発生しました: {e}")
