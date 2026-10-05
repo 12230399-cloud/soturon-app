@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime
 import os
 import openai
@@ -12,28 +13,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# 2. セッション状態（入力文字数）の初期化
+# 2. セッション状態の初期化
 if "total_chars" not in st.session_state:
   st.session_state.total_chars = 0
+
+
+# 画像をbase64形式に変換する関数
+def encode_image(image_bytes):
+  return base64.b64encode(image_bytes).read().decode("utf-8")
+
 
 # 3. 画面サイズ最適化 & ポップデザインのカスタムCSS
 st.markdown(
     """
     <style>
-    /* 全体の背景色と基本文字色 */
     .stApp {
         background-color: #FFFDE7 !important;
         color: #212121 !important;
     }
-    
     .main .block-container {
         max-width: 800px;
         padding-left: 1rem;
         padding-right: 1rem;
         padding-top: 1rem;
     }
-
-    /* タイトルエリア */
     .title-box {
         background: linear-gradient(135deg, #FFB74D, #FFD54F);
         padding: 15px 20px;
@@ -53,8 +56,6 @@ st.markdown(
         margin-top: 5px;
         font-weight: bold;
     }
-
-    /* 探検レベルバー */
     .status-bar {
         background-color: #FFFFFF;
         border: 2px solid #FFCA28;
@@ -67,39 +68,28 @@ st.markdown(
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
         font-size: clamp(13px, 3vw, 16px);
     }
-
-    /* メッセージ吹き出し */
     .stChatMessage {
         border-radius: 18px !important;
         padding: 10px 14px !important;
         margin-bottom: 8px !important;
         font-size: clamp(14px, 3vw, 16px) !important;
     }
-    
     .stChatMessage, .stChatMessage p, .stChatMessage span, .stChatMessage div {
         color: #212121 !important;
     }
-
-    /* ふりがな（ルビ）の装飾 */
     rt {
         font-size: 0.65em;
         color: #E65100;
         font-weight: bold;
     }
-
-    /* ユーザーメッセージ */
     div[data-testid="stChatMessage"]:nth-child(even) {
         background-color: #E1F5FE !important;
         border: 2px solid #81D4FA !important;
     }
-
-    /* AIメッセージ */
     div[data-testid="stChatMessage"]:nth-child(odd) {
         background-color: #E8F5E9 !important;
         border: 2px solid #A5D6A7 !important;
     }
-
-    /* 入力フォーム */
     .stChatInputContainer {
         border-radius: 25px !important;
         border: 3px solid #FFB74D !important;
@@ -112,7 +102,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# タイトル表示（やさしい言葉遣い）
+# タイトル表示
 st.markdown(
     """
     <div class="title-box">
@@ -123,7 +113,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 探検レベル・入力文字数表示
+# 探検レベル表示
 level = (st.session_state.total_chars // 30) + 1
 st.markdown(
     f"""
@@ -148,28 +138,25 @@ with st.sidebar:
   st.divider()
   st.info("💡 対話ログは `chat_log.csv` に自動保存されます。")
 
-# 5. システムプロンプト（小3向けの表記ルールを強化）
+# 5. システムプロンプト（画像認識・植物病気診断ルールを追加）
 SYSTEM_PROMPT = """
 あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
 相手は小学3年生の児童です。身近な自然や理科の不思議に興味を持てるよう優しく対話します。
 
+【写真（画像）が送られてきた場合ルール】
+1. 画像が植物や葉っぱの場合、状態（色、模様、枯れ具合、虫食いなど）を観察してやさしく説明してください。
+2. もし病気や元気がない状態なら、怖がらせないように理由（水、日光、病気、虫など）と、元気にさせるためのアドバイス（お世話のしかた）を教えてあげてください。
+3. 植物以外（空、生き物、身の回りのものなど）の写真でも、観察したポイントを面白く解説してください。
+
 【重要：言葉遣いと漢字の制限】
 - 原則として「小学1年生〜3年生で習う漢字」のみを使用してください。
-- 4年生以上で習う難しい漢字や難しい用語は使わず、できるだけ「ひらがな」にするか、必ずルビタグを使ってふりがなを振ってください。
-- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>実験<rt>じっけん</rt></ruby>、<ruby>太陽<rt>たいよう</rt></ruby>、<ruby>昆虫<rt>こんちゅう</rt></ruby>
+- 4年生以上で習う難しい漢字や難しい用語（〇〇病など専門用語）は使わず、できるだけ「ひらがな」にするか、必ずルビタグを使ってふりがなを振ってください。
+- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>病気<rt>びょうき</rt></ruby>、<ruby>太陽<rt>たいよう</rt></ruby>、<ruby>栄養<rt>えいよう</rt></ruby>
 
 【会話を長続きさせるためのルール】
-1. 【親しみやすいリアクション】
-   - 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
-   - 返信は100文字程度で短く読みやすくする。
-
-2. 【会話の展開フロー】
-   - ① 児童の返事（タイピング）を褒める。
-   - ② 身近な疑問や体験（天気、虫、植物、光、影、水など）へ自然につなげる。
-   - ③ 必ず『具体的に答えやすい質問』で終わる（例：「どっちだと思う？」「見たことあるかな？」など）。
-
-3. 【会話を終わらせない工夫】
-   - 児童が「わからない」「忘れた」と答えたら、優しくヒント（2〜3個の選択肢など）を出して助ける。
+1. 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
+2. 返信は100〜150文字程度でコンパクトにする。
+3. 必ず『具体的に答えやすい質問』で終わる（例：「お水は毎日あげてるかな？」「葉っぱのうらがわも見てみてね！」など）。
 """
 
 # 6. 会話履歴の初期化
@@ -179,7 +166,7 @@ if "messages" not in st.session_state:
       {
           "role": "assistant",
           "content": (
-              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション1】\n最近、家の近くや学校で見かけた「すきな生き物」や「気になるお天気」はあるかな？文字で打って教えてね！"
+              "こんにちは！<ruby>探検<rt>たんけん</rt></ruby>ハカセだよ🎓\nハカセと一緒に、身の回りの「ふしぎ」を見つける<ruby>探検<rt>たんけん</rt></ruby>に出かけよう！\n\n【きょうのミッション1】\n育てているお花や、気になった葉っぱ・生き物の「写真」があったら送ってみてね！文字でのお返事も大歓迎だよ！"
           ),
       },
   ]
@@ -189,7 +176,16 @@ for msg in st.session_state.messages:
   if msg["role"] != "system":
     avatar = "🎓" if msg["role"] == "assistant" else "👦"
     with st.chat_message(msg["role"], avatar=avatar):
+      # 画像があれば表示
+      if "image" in msg and msg["image"]:
+        st.image(msg["image"], use_container_width=True)
       st.markdown(msg["content"], unsafe_allow_html=True)
+
+# 写真アップロード（カメラ/ファイル選択）エリア
+uploaded_file = st.file_uploader(
+    "📷 しゃしんを おくる（クリックして えらぶ / パシャリと とる）",
+    type=["jpg", "jpeg", "png"],
+)
 
 # 入力補助ボタン（たすけぶね）
 st.caption("💬 たすけぶねボタン（おすと すぐに へんじが できるよ）:")
@@ -199,33 +195,65 @@ if col1.button("💡 ヒントちょうだい！"):
   preset_input = "ヒントをちょうだい！"
 if col2.button("❓ つぎのミッション！"):
   preset_input = "つぎのミッションをだして！"
-if col3.button("😅 ちょっとわからない"):
-  preset_input = "ちょっとわからないから教えて！"
+if col3.button("🌱 この植物元気かな？"):
+  preset_input = "写真の植物（しょくぶつ）が元気かどうか教えて！"
 
 # 8. 入力処理
 user_input = st.chat_input("ここに へんじを かこう！")
 if preset_input:
   user_input = preset_input
 
-if user_input:
+# 写真または文字が入力された場合
+if user_input or uploaded_file:
   if not api_key:
     st.error(
         "👈 ひだりの「せってい」に OpenAI APIキー を入れてからおくってね！"
     )
   else:
-    # 文字数カウントを加算
-    st.session_state.total_chars += len(user_input)
+    # 入力テキストがない場合はデフォルト文章を設定
+    text_content = user_input if user_input else "しゃしんを おくったよ！"
+    st.session_state.total_chars += len(text_content)
 
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user", avatar="👦"):
-      st.markdown(user_input, unsafe_allow_html=True)
+    # API送信用のメッセージコンテンツを作成
+    api_content = []
+    api_content.append({"type": "text", "text": text_content})
+
+    image_data = None
+    if uploaded_file:
+      image_data = uploaded_file.getvalue()
+      base64_img = encode_image(uploaded_file)
+      api_content.append({
+          "type": "image_url",
+          "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"},
+      })
+
+    # ユーザー発言を履歴に追加
+    user_msg = {
+        "role": "user",
+        "content": text_content,
+        "image": image_data,
+        "api_content": api_content,
+    }
+    st.session_state.messages.append(user_msg)
+
+    # OpenAI APIへ送信する会話形式の組み立て
+    api_messages = []
+    for m in st.session_state.messages:
+      if m["role"] == "system":
+        api_messages.append({"role": "system", "content": m["content"]})
+      elif m["role"] == "user":
+        # 画像付きの場合は api_content、文字のみの場合は content を送る
+        content_to_send = m.get("api_content", m["content"])
+        api_messages.append({"role": "user", "content": content_to_send})
+      elif m["role"] == "assistant":
+        api_messages.append({"role": "assistant", "content": m["content"]})
 
     try:
       client = openai.OpenAI(api_key=api_key)
       with st.chat_message("assistant", avatar="🎓"):
-        with st.spinner("ハカセが考え中..."):
+        with st.spinner("ハカセが しゃしんを かんさつ中..."):
           response = client.chat.completions.create(
-              model="gpt-4o-mini", messages=st.session_state.messages
+              model="gpt-4o-mini", messages=api_messages
           )
           bot_reply = response.choices[0].message.content
           st.markdown(bot_reply, unsafe_allow_html=True)
@@ -237,9 +265,9 @@ if user_input:
       # ログの自動保存
       log_df = pd.DataFrame([{
           "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-          "user_input": user_input,
+          "user_input": text_content,
+          "has_image": True if uploaded_file else False,
           "bot_response": bot_reply,
-          "input_length": len(user_input),
           "total_chars": st.session_state.total_chars,
       }])
       log_file = "chat_log.csv"
