@@ -165,7 +165,6 @@ if page == "💬 チャット":
   # ✏️ ユーザーの文字入力欄
   user_input = st.chat_input("ここに メッセージや しつもんを かこう！")
 
-  # たすけぶねボタンが押された場合はそれを送信テキストにする
   if preset_input:
     user_input = preset_input
 
@@ -288,10 +287,10 @@ elif page == "📊 成長グラフ":
 
     st.line_chart(df_user.set_index("timestamp")["vocab_growth"])
 
-    # 3. 過去の送信履歴リスト
+    # 3. 過去の送信履歴リスト（.iloc[::-1] で逆順表示に修正）
     with st.expander("📝 これまでの 入力きろくを 見る"):
       st.dataframe(
           df_user[
               ["timestamp", "char_count", "typing_speed", "text"]
-          ].reverse()
+          ].iloc[::-1]
       )
