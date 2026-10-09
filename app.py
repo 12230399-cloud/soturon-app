@@ -615,14 +615,27 @@ if "チャット" in page:
 
   st.divider()
 
-  # 履歴表示
-  for msg in current_thread["messages"]:
-    if msg["role"] != "system":
-      avatar = "🎓" if msg["role"] == "assistant" else "👦"
-      with st.chat_message(msg["role"], avatar=avatar):
-        if "image" in msg and msg["image"]:
-          st.image(msg["image"], use_container_width=True)
-        st.markdown(msg["content"], unsafe_allow_html=True)
+  # 履歴表示（システムメッセージ除く）
+  non_system_msgs = [
+      m for m in current_thread["messages"] if m["role"] != "system"
+  ]
+  for idx, msg in enumerate(non_system_msgs):
+    avatar = "🎓" if msg["role"] == "assistant" else "👦"
+
+    # ★最新のハカセ（assistant）回答の「冒頭（直前）」にジャンプ目印を設置！
+    if (
+        msg["role"] == "assistant"
+        and idx == len(non_system_msgs) - 1
+        and len(non_system_msgs) > 1
+    ):
+      st.markdown(
+          '<div id="latest-reply-start"></div>', unsafe_allow_html=True
+      )
+
+    with st.chat_message(msg["role"], avatar=avatar):
+      if "image" in msg and msg["image"]:
+        st.image(msg["image"], use_container_width=True)
+      st.markdown(msg["content"], unsafe_allow_html=True)
 
   # 📷 写真選択エリア
   uploaded_file = st.file_uploader(
@@ -757,19 +770,19 @@ if "チャット" in page:
       except Exception as e:
         st.error(f"エラーが発生しました: {e}")
 
-  # 🔽 新しい回答位置へ自動スクロールするスクリプト（画面描画完了時）
+  # 🎯 最新の回答の冒頭（#latest-reply-start）へピッタリ滑らかジャンプするJavaScript
   components.html(
       """
       <script>
-          setTimeout(function() {
-              var mainEl = window.parent.document.querySelector('section.main');
-              if (mainEl) {
-                  mainEl.scrollTo({
-                      top: mainEl.scrollHeight,
-                      behavior: 'smooth'
-                  });
+          function scrollToReplyStart() {
+              var parentDoc = window.parent.document;
+              var target = parentDoc.getElementById('latest-reply-start');
+              if (target) {
+                  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }
-          }, 150);
+          }
+          setTimeout(scrollToReplyStart, 150);
+          setTimeout(scrollToReplyStart, 400);
       </script>
       """,
       height=0,
