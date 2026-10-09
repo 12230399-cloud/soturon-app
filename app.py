@@ -258,6 +258,8 @@ def encode_image(image_bytes):
 
 
 # --- セッション初期化 ---
+if "user_name" not in st.session_state:
+  st.session_state.user_name = "たろう"
 if "last_send_time" not in st.session_state:
   st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state:
@@ -300,6 +302,14 @@ st.markdown(
     .main .block-container {
         max-width: 800px;
         padding-top: 1rem;
+    }
+    .user-card {
+        background-color: #FFFFFF;
+        border: 2px solid #FFB74D;
+        border-radius: 15px;
+        padding: 10px 15px;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
     .chat-header {
         background: linear-gradient(135deg, #FFB74D, #FFD54F);
@@ -368,9 +378,6 @@ with st.sidebar:
           if is_child
           else st.radio("ページ選択", ["💬 チャット", "📊 記録レポート"])
       ),
-      "user_name_label": (
-          "あなたの おなまえ" if is_child else "お名前（ユーザー名）"
-      ),
       "btn_new_chat": (
           "➕ あたらしい おはなし" if is_child else "➕ 新しいおはなし"
       ),
@@ -407,11 +414,9 @@ with st.sidebar:
           else "質問やメッセージを入力してください..."
       ),
       "dash_title": (
-          f"📈 {st.session_state.get('current_user', '')} さんの せいちょう"
-          " レポート"
+          f"📈 {st.session_state.user_name} さんの せいちょう レポート"
           if is_child
-          else f"📈 {st.session_state.get('current_user', '')} さんの"
-          " 探検・タイピング記録"
+          else f"📈 {st.session_state.user_name} さんの 探検・タイピング記録"
       ),
       "metric_chars": (
           "⭐ ぜんぶで うった もじ" if is_child else "⭐ トータル入力文字数"
@@ -440,17 +445,8 @@ with st.sidebar:
   }
 
   page = labels["nav_page"]
-
   active_prompt = (
       CHILD_SYSTEM_PROMPT if is_child else ADULT_SYSTEM_PROMPT
-  )
-
-  st.divider()
-  st.header("👤 ユーザー設定")
-  user_name = st.text_input(
-      labels["user_name_label"],
-      value="たろう",
-      help="名前を変えると自分の記録が残るよ！",
   )
 
   # スレッド管理の初期化
@@ -462,10 +458,10 @@ with st.sidebar:
   # ユーザー切り替え時の過去データ復元
   if (
       "current_user" not in st.session_state
-      or st.session_state.current_user != user_name
+      or st.session_state.current_user != st.session_state.user_name
   ):
-    st.session_state.current_user = user_name
-    df_user_data = load_user_data(user_name)
+    st.session_state.current_user = st.session_state.user_name
+    df_user_data = load_user_data(st.session_state.user_name)
 
     if not df_user_data.empty and "thread_id" in df_user_data.columns:
       restored_threads = {}
@@ -518,7 +514,7 @@ with st.sidebar:
       st.download_button(
           label="📥 記録（CSV）を保存する",
           data=f,
-          file_name=f"理科探検きろく_{user_name}.csv",
+          file_name=f"理科探検きろく_{st.session_state.user_name}.csv",
           mime="text/csv",
       )
 
@@ -555,6 +551,30 @@ if "チャット" in page:
   if current_thread["messages"][0]["role"] == "system":
     current_thread["messages"][0]["content"] = active_prompt
 
+  # ★ 1. 画面最上部に「お名前設定」エリアを配置（固定キーでモード切替時のリセット防止！）
+  with st.container():
+    st.markdown('<div class="user-card">', unsafe_allow_html=True)
+    u_col1, u_col2 = st.columns([3, 1])
+    with u_col1:
+      input_name = st.text_input(
+          "👤 あなたの おなまえ（探検者の名前）"
+          if is_child
+          else "👤 探検者（ユーザー名）",
+          value=st.session_state.user_name,
+          key="global_user_name_input",
+      )
+      if input_name != st.session_state.user_name:
+        st.session_state.user_name = input_name
+        st.rerun()
+    with u_col2:
+      st.markdown("<br>", unsafe_allow_html=True)
+      st.caption(
+          f"✨ 設定中: **{st.session_state.user_name}**"
+          if is_child
+          else f"👤 現在: **{st.session_state.user_name}**"
+      )
+    st.markdown("</div>", unsafe_allow_html=True)
+
   # ヘッダー表示
   header_title = (
       "🔍 わくわく<ruby>理科<rt>りか</rt></ruby><ruby>探検<rt>たんけん</rt></ruby>チャット"
@@ -563,9 +583,9 @@ if "チャット" in page:
       else "🔍 大人も楽しむ理科探検チャット 🎓"
   )
   header_sub = (
-      f"たんけんしゃ: {user_name} さん"
+      f"たんけんしゃ: {st.session_state.user_name} さん"
       if is_child
-      else f"探検者: {user_name} さん（オトナモード）"
+      else f"探検者: {st.session_state.user_name} さん（オトナモード）"
   )
 
   st.markdown(
@@ -622,7 +642,7 @@ if "チャット" in page:
   for idx, msg in enumerate(non_system_msgs):
     avatar = "🎓" if msg["role"] == "assistant" else "👦"
 
-    # ★最新のハカセ（assistant）回答の「冒頭（直前）」にジャンプ目印を設置！
+    # ★最新のハカセ（assistant）回答の「冒頭（直前）」にジャンプ目印を設置
     if (
         msg["role"] == "assistant"
         and idx == len(non_system_msgs) - 1
@@ -691,7 +711,7 @@ if "チャット" in page:
       unique_chars = len(set(user_input))
 
       save_user_stat(
-          user_name,
+          st.session_state.user_name,
           st.session_state.current_thread_id,
           current_thread["title"],
           char_cnt,
@@ -754,7 +774,7 @@ if "チャット" in page:
         )
 
         save_user_stat(
-            user_name,
+            st.session_state.user_name,
             st.session_state.current_thread_id,
             current_thread["title"],
             len(reply),
@@ -794,7 +814,7 @@ if "チャット" in page:
 else:
   st.title(labels["dash_title"])
 
-  df_all = load_user_data(user_name)
+  df_all = load_user_data(st.session_state.user_name)
 
   if df_all.empty:
     st.info("まだ データがありません！チャットで ハカセと お話ししてみてね！")
