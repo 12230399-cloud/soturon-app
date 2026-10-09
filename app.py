@@ -18,12 +18,39 @@ st.set_page_config(
 )
 
 STATS_FILE = "user_stats.csv"
-SYSTEM_PROMPT = """
+
+# --- プロンプト定義 ---
+CHILD_SYSTEM_PROMPT = """
 あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
 身近な自然や生き物、理科の不思議に興味を持てるよう優しく対話します。
-写真が送られてきた時は、特徴をよく観察してから生物の種類や名前を分かりやすく解説してください。
-小学1〜3年生で習う漢字を中心に使い、難しい漢字にはルビ（<ruby>漢字<rt>かんじ</rt></ruby>）を振ってください。
-回答は100〜150文字程度で、最後は答えやすい質問で締めくくってください。
+
+【写真（画像）が送られてきた場合ルール】
+1. 写真に写っているもの（生き物、虫、魚、植物、空など）の形・色・特徴をよく観察し、名前や種類を特定・推測して分かりやすく教えてあげてください。
+2. 植物の病気や不調の場合は、怖がらせないように理由とお世話のアドバイスを優しく教えてあげてください。
+
+【重要：言葉遣いと漢字の制限】
+- 原則として「小学1年生〜3年生で習う漢字」のみを使用してください。
+- 4年生以上で習う難しい漢字や専門用語は使わず、ひらがなにするかルビタグを使ってふりがなを振ってください。
+- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>病気<rt>びょうき</rt></ruby>、<ruby>特徴<rt>とくちょう</rt></ruby>
+
+【会話を長続きさせるためのルール】
+1. 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
+2. 返信は100〜150文字程度でコンパクトにする。
+3. 必ず『具体的に答えやすい質問』で終わる（例：「どこで見つけたのかな？」「お水は毎日あげてるかな？」など）。
+"""
+
+ADULT_SYSTEM_PROMPT = """
+あなたは科学・生物学・農学の専門知識を持つ知的な学習パートナー「探検ハカセ（研究者モード）」です。
+大人の利用者や保護者、教員に対して、科学的根拠に基づいた詳細かつ正確な解説を提供します。
+
+【写真（画像）の分析ルール】
+1. 生物・昆虫・植物・鉱物・自然現象等の名称や分類、特徴を精度高く分析・特定してください。
+2. 植物の病気や不調が疑われる場合は、原因（菌・ウイルス・害虫・生理障害・環境因子等）と、具体的な治療・育成対策（剪定、薬剤、水やり・日当たりの調整等）を詳細に説明してください。
+
+【文体・表現ルール】
+1. 専門用語や一般的な漢字を使い、丁寧な敬体（〜です、〜ます）で記述してください。（ルビタグは使用しないでください）
+2. 結論だけでなく、なぜそうなるのかという科学的メカニズムや背景知識まで深掘りして分かりやすく解説してください。
+3. 返信の長さは200〜400文字程度で、必要に応じて追加の観察ポイントやアドバイスを添えてください。
 """
 
 
@@ -82,51 +109,29 @@ def encode_image(image_bytes):
 
 
 # --- セッション初期化 ---
-if "threads" not in st.session_state:
-  # {thread_id: {"title": "おはなし 1", "messages": [...]}}
-  initial_id = str(uuid.uuid4())
-  st.session_state.threads = {
-      initial_id: {
-          "title": "あたらしい おはなし 1",
-          "messages": [
-              {"role": "system", "content": SYSTEM_PROMPT},
-              {
-                  "role": "assistant",
-                  "content": (
-                      "こんにちは！探検ハカセだよ🎓\nきょうは"
-                      " どんな「ふしぎ」を"
-                      " はっけんしたかな？写真や文章で教えてね！"
-                  ),
-              },
-          ],
-      }
-  }
-  st.session_state.current_thread_id = initial_id
-
 if "last_send_time" not in st.session_state:
   st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state:
   st.session_state.uploader_key = 0
 
 
-# 新規チャット作成関数
-def create_new_thread():
+# 新規スレッド作成用関数
+def create_new_thread(system_prompt):
   new_id = str(uuid.uuid4())
-  thread_count = len(st.session_state.threads) + 1
-  st.session_state.threads[new_id] = {
+  thread_count = len(st.session_state.get("threads", {})) + 1
+  return new_id, {
       "title": f"あたらしい おはなし {thread_count}",
       "messages": [
-          {"role": "system", "content": SYSTEM_PROMPT},
+          {"role": "system", "content": system_prompt},
           {
               "role": "assistant",
               "content": (
                   "新しい探検のスタートだね！🎓\nどんなことを"
-                  " はかせに 聞いてみる？"
+                  " ハカセに 聞いてみる？"
               ),
           },
       ],
   }
-  st.session_state.current_thread_id = new_id
 
 
 # --- CSSスタイル ---
@@ -176,10 +181,24 @@ st.markdown(
 )
 
 
-# --- サイドバー (ナビゲーション＆スレッド切替) ---
+# --- サイドバーナビゲーション ---
 with st.sidebar:
   st.title("🧭 メニュー")
   page = st.radio("ページを えらんでね", ["💬 チャット", "📊 成長グラフ"])
+
+  st.divider()
+  st.header("🎭 モード設定")
+  mode = st.radio(
+      "対話モード",
+      ["👦 こどもモード", "🧑 オトナモード"],
+      index=0,
+      help="オトナモードではルビがなくなり、より専門的で詳しい解説が返ってきます。",
+  )
+
+  # モードに応じたシステムプロンプトの選択
+  active_prompt = (
+      CHILD_SYSTEM_PROMPT if "こども" in mode else ADULT_SYSTEM_PROMPT
+  )
 
   st.divider()
   st.header("👤 ユーザー設定")
@@ -189,7 +208,13 @@ with st.sidebar:
       help="名前を変えると自分の記録が残るよ！",
   )
 
-  # CSVから会話スレッドを復元（ユーザー名が変わった時など）
+  # スレッド管理の初期化
+  if "threads" not in st.session_state:
+    init_id, init_thread = create_new_thread(active_prompt)
+    st.session_state.threads = {init_id: init_thread}
+    st.session_state.current_thread_id = init_id
+
+  # ユーザー切り替え時の過去データ復元
   if (
       "current_user" not in st.session_state
       or st.session_state.current_user != user_name
@@ -201,8 +226,12 @@ with st.sidebar:
       restored_threads = {}
       grouped = df_user_data.groupby("thread_id")
       for tid, group in grouped:
-        title = group["thread_title"].iloc[0] if "thread_title" in group.columns else "過去のおはなし"
-        msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+        title = (
+            group["thread_title"].iloc[0]
+            if "thread_title" in group.columns
+            else "過去のおはなし"
+        )
+        msgs = [{"role": "system", "content": active_prompt}]
         for _, row in group.iterrows():
           role = row.get("role", "user")
           if pd.isna(role):
@@ -218,12 +247,12 @@ with st.sidebar:
     st.divider()
     st.header("💬 話題（チャット一覧）")
 
-    # 新しいチャットを作るボタン
     if st.button("➕ あたらしい おはなし", use_container_width=True):
-      create_new_thread()
+      new_id, new_thread = create_new_thread(active_prompt)
+      st.session_state.threads[new_id] = new_thread
+      st.session_state.current_thread_id = new_id
       st.rerun()
 
-    # スレッド（話題）リストの選択
     thread_options = {
         tid: data["title"] for tid, data in st.session_state.threads.items()
     }
@@ -253,7 +282,7 @@ with st.sidebar:
     try:
       df_uploaded = pd.read_csv(uploaded_csv)
       df_uploaded.to_csv(STATS_FILE, index=False, encoding="utf-8-sig")
-      st.success("過去の記録を読み込みました！再読み込みしてね。")
+      st.success("過去の記録を読み込みました！")
     except Exception:
       st.error("ファイルの読み込みに失敗しました。")
 
@@ -263,7 +292,12 @@ with st.sidebar:
   if not api_key:
     api_key = st.text_input("OpenAI APIキーを入力", type="password")
 
-  selected_model = st.selectbox("🧠 AIのモデル", ["gpt-4o", "gpt-4o-mini"], index=0)
+  selected_model = st.selectbox(
+      "🧠 AIのモデル",
+      ["gpt-4o", "gpt-4o-mini"],
+      index=0,
+      help="gpt-4oを選ぶと画像識別や病気判定の精度が高くなります！",
+  )
 
 
 # ==========================================
@@ -272,18 +306,22 @@ with st.sidebar:
 if page == "💬 チャット":
   current_thread = st.session_state.threads[st.session_state.current_thread_id]
 
-  # 現在の話題ヘッダーを表示
+  # 現在のシステムプロンプトを最新のモード設定に同期
+  if current_thread["messages"][0]["role"] == "system":
+    current_thread["messages"][0]["content"] = active_prompt
+
+  # ヘッダー表示
   st.markdown(
       f"""
       <div class="chat-header">
           <h2>🔍 {current_thread['title']} 🎓</h2>
-          <p>たんけんしゃ: {user_name} さん</p>
+          <p>たんけんしゃ: {user_name} さん （{mode}）</p>
       </div>
   """,
       unsafe_allow_html=True,
   )
 
-  # 会話履歴の描画
+  # 履歴表示
   for msg in current_thread["messages"]:
     if msg["role"] != "system":
       avatar = "🎓" if msg["role"] == "assistant" else "👦"
@@ -300,7 +338,9 @@ if page == "💬 チャット":
   )
 
   if uploaded_file:
-    st.info("📸 写真が準備できました！下の入力欄に質問を書いて送信してね。")
+    st.info(
+        "📸 写真が準備できました！下の入力欄に質問を書くか、たすけぶねボタンを押してね。"
+    )
 
   # 💬 たすけぶねボタン
   st.caption("💬 たすけぶねボタン（文字を打つのに困った時は押してね！）:")
@@ -323,7 +363,7 @@ if page == "💬 チャット":
     if not api_key:
       st.error("👈 ひだりの「せってい」に APIキーを入力してね！")
     else:
-      # 初回発言時に自動で話題タイトルをつける（例: 先頭12文字）
+      # 初回発言時に自動で話題タイトルを設定
       if (
           current_thread["title"].startswith("あたらしい おはなし")
           and len(current_thread["messages"]) <= 2
@@ -339,7 +379,7 @@ if page == "💬 チャット":
       typing_speed = (char_cnt / elapsed_time) * 60
       unique_chars = len(set(user_input))
 
-      # ログを保存（スレッドID・話題タイトル付き）
+      # データ保存
       save_user_stat(
           user_name,
           st.session_state.current_thread_id,
@@ -468,6 +508,12 @@ elif page == "📊 成長グラフ":
       st.line_chart(df_user.set_index("timestamp")["vocab_growth"])
 
       with st.expander("📝 これまでの 入力きろくを 見る"):
-        display_cols = ["timestamp", "thread_title", "char_count", "typing_speed", "text"]
+        display_cols = [
+            "timestamp",
+            "thread_title",
+            "char_count",
+            "typing_speed",
+            "text",
+        ]
         available_cols = [c for c in display_cols if c in df_user.columns]
         st.dataframe(df_user[available_cols].iloc[::-1])
