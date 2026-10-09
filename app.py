@@ -2,6 +2,7 @@ import base64
 from datetime import datetime
 import io
 import os
+import random
 import time
 import uuid
 import openai
@@ -18,6 +19,29 @@ st.set_page_config(
 )
 
 STATS_FILE = "user_stats.csv"
+
+# --- 雑学（トリビア）データベース ---
+TRIVIA_CHILD = [
+    "🌌 <b>宇宙（うちゅう）には 音（おと）が ない！</b><br>空気（くうき）がないから、どんなに大きな音も つたわらないんだよ。",
+    "🐛 <b>あおむしの くさい ツノ！</b><br>アゲハチョウの 幼虫（ようちゅう）は、びっくりすると あたまから くさいツノを 出すよ！",
+    "🍌 <b>バナナは「木（き）」じゃない！？</b><br>バナナの 木に 見える部分は、実は 大きな「くさ（草）」なんだよ！",
+    "🦦 <b>ラッコは 手を つないで ねる！</b><br>海（うみ）で 流（なが）されないように、仲良（なかよ）しと 手を つないで ねるんだよ。",
+    "🦴 <b>赤ちゃんは 大人（おとな）より ほねが多い！</b><br>赤ちゃんの ほねは 約300個（こ）あって、大きくなると くっついて 約206個になるよ！",
+    "🐟 <b>トビウオは 空（そら）を 400mも とぶ！</b><br>敵（てき）から にげるために、海（うみ）の上を パトカーより はやく とべるんだよ。",
+    "🍉 <b>スイカは「やさい」の なかま！</b><br>甘（あま）くて フルーツみたいだけど、畑（はたけ）で できるから「野菜（やさい）」なんだよ！",
+    "🐙 <b>タコには 心臓（しんぞう）が 3つある！</b><br>からだ全体に 血液（けつえき）を おくるために、3つの 心臓が はたらいているんだよ。",
+]
+
+TRIVIA_ADULT = [
+    "🌌 <b>宇宙空間には「音」が存在しない</b><br>音波を伝える媒体（空気）が存在しないため完全な静寂ですが、電波を音に変換すると惑星特有の音が聴こえます。",
+    "🐛 <b>アゲハチョウの幼虫の臭い角の秘密</b><br>威嚇時に出す橙色の角（臭角）の匂いは、食べた柑橘類の葉の脂肪酸を体内で濃縮・合成したものです。",
+    "🍌 <b>バナナは樹木ではなく「巨大な草」</b><br>木に見える幹のような部分は、葉の柄が重なり合った「偽茎（ぎけい）」と呼ばれる草本構造です。",
+    "🦦 <b>ラッコが手をつないで眠る理由</b><br>海流で沖に流されるのを防ぐため、仲間と手をつないだり、海藻（ジャイアントケルプ）を体に巻き付けて眠ります。",
+    "🦴 <b>赤ちゃんの骨の数は大人より約100個多い</b><br>誕生時は約300個の軟骨中心ですが、成長に伴って骨同士が結合し、大人になると約206個になります。",
+    "🐟 <b>トビウオの滑空能力は時速70km</b><br>大型魚から逃れるため発達した胸ビレを広げ、水面を切って最大400m以上も空中を滑空できます。",
+    "🍉 <b>スイカやメロンは植物学上「果実的野菜」</b><br>草本植物に実るため野菜に分類されますが、消費形態から「果実的野菜」とも呼ばれます。",
+    "🐙 <b>タコの心臓は3つ、血液は青い</b><br>全身に血を送る心臓1つのほか、エラに血を送る鰓心臓（えにしんぞう）が2つあり、銅を含んだ血で酸素を運ぶため青く見えます。",
+]
 
 # --- プロンプト定義 ---
 CHILD_SYSTEM_PROMPT = """
@@ -113,6 +137,8 @@ if "last_send_time" not in st.session_state:
   st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state:
   st.session_state.uploader_key = 0
+if "trivia_seed" not in st.session_state:
+  st.session_state.trivia_seed = random.randint(0, 1000)
 
 
 # 新規スレッド作成用関数
@@ -169,6 +195,16 @@ st.markdown(
         font-size: 13px;
         font-weight: bold;
     }
+    .trivia-card {
+        background-color: #FFFFFF;
+        border: 2px solid #FFE082;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+        color: #424242;
+        height: 100%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
     .stChatMessage {
         border-radius: 16px !important;
         padding: 10px 14px !important;
@@ -200,7 +236,7 @@ with st.sidebar:
 
   st.divider()
 
-  # 画面用ラベルの定義（自然で親しみやすい言葉にマイルド化）
+  # 画面用ラベルの定義
   labels = {
       "nav_page": (
           st.radio("ページ選択", ["💬 チャット", "📊 成長グラフ"])
@@ -417,6 +453,46 @@ if "チャット" in page:
       unsafe_allow_html=True,
   )
 
+  # 💡 きょうの理科トリビア（3選）表示セクション
+  trivia_db = TRIVIA_CHILD if is_child else TRIVIA_ADULT
+  random.seed(st.session_state.trivia_seed)
+  selected_trivia = random.sample(
+      trivia_db, min(3, len(trivia_db))
+  )  # 3つをランダム選出
+
+  t_col1, t_col2 = st.columns([4, 1])
+  with t_col1:
+    st.markdown(
+        "<b>💡 きょうの 理科トリビア（3選）:</b>"
+        if is_child
+        else "<b>💡 本日の科学豆知識（3選）:</b>",
+        unsafe_allow_html=True,
+    )
+  with t_col2:
+    if st.button("🎲 シャッフル", help="別の雑学に入れ替えます"):
+      st.session_state.trivia_seed = random.randint(0, 1000)
+      st.rerun()
+
+  # 3つのかわるがわる雑学カードを表示
+  c1, c2, c3 = st.columns(3)
+  with c1:
+    st.markdown(
+        f'<div class="trivia-card">{selected_trivia[0]}</div>',
+        unsafe_allow_html=True,
+    )
+  with c2:
+    st.markdown(
+        f'<div class="trivia-card">{selected_trivia[1]}</div>',
+        unsafe_allow_html=True,
+    )
+  with c3:
+    st.markdown(
+        f'<div class="trivia-card">{selected_trivia[2]}</div>',
+        unsafe_allow_html=True,
+    )
+
+  st.divider()
+
   # 履歴表示
   for msg in current_thread["messages"]:
     if msg["role"] != "system":
@@ -465,7 +541,6 @@ if "チャット" in page:
     if not api_key:
       st.error("👈 ひだりの「せってい」に APIキーを入力してね！")
     else:
-      # 初回発言時に自動で話題タイトルを設定
       if (
           current_thread["title"].startswith("あたらしい")
           or current_thread["title"].startswith("新しい")
@@ -481,7 +556,6 @@ if "チャット" in page:
       typing_speed = (char_cnt / elapsed_time) * 60
       unique_chars = len(set(user_input))
 
-      # データ保存
       save_user_stat(
           user_name,
           st.session_state.current_thread_id,
