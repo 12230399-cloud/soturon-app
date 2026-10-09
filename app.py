@@ -215,9 +215,11 @@ def save_user_stat(
     role="user",
 ):
   now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+  # 名前が空の場合は「探検者」または「ゲスト」にする
+  saved_name = user_name.strip() if user_name.strip() else "探検者"
   new_data = pd.DataFrame([{
       "timestamp": now,
-      "user_name": user_name,
+      "user_name": saved_name,
       "thread_id": thread_id,
       "thread_title": thread_title,
       "role": role,
@@ -242,7 +244,8 @@ def load_user_data(user_name):
     return pd.DataFrame()
   try:
     df = pd.read_csv(STATS_FILE)
-    return df[df["user_name"] == user_name]
+    target_name = user_name.strip() if user_name.strip() else "探検者"
+    return df[df["user_name"] == target_name]
   except Exception:
     return pd.DataFrame()
 
@@ -259,7 +262,7 @@ def encode_image(image_bytes):
 
 # --- セッション初期化 ---
 if "user_name" not in st.session_state:
-  st.session_state.user_name = "たろう"
+  st.session_state.user_name = ""  # ★初期値を空文字に変更！
 if "last_send_time" not in st.session_state:
   st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state:
@@ -307,7 +310,7 @@ st.markdown(
         background-color: #FFFFFF;
         border: 2px solid #FFB74D;
         border-radius: 15px;
-        padding: 10px 15px;
+        padding: 12px 18px;
         margin-bottom: 12px;
         box-shadow: 0 2px 6px rgba(0,0,0,0.05);
     }
@@ -414,9 +417,9 @@ with st.sidebar:
           else "質問やメッセージを入力してください..."
       ),
       "dash_title": (
-          f"📈 {st.session_state.user_name} さんの せいちょう レポート"
+          f"📈 {st.session_state.user_name if st.session_state.user_name else '探検者'} さんの せいちょう レポート"
           if is_child
-          else f"📈 {st.session_state.user_name} さんの 探検・タイピング記録"
+          else f"📈 {st.session_state.user_name if st.session_state.user_name else '探検者'} さんの 探検・タイピング記録"
       ),
       "metric_chars": (
           "⭐ ぜんぶで うった もじ" if is_child else "⭐ トータル入力文字数"
@@ -510,11 +513,14 @@ with st.sidebar:
   st.divider()
   st.header("💾 バックアップ")
   if os.path.exists(STATS_FILE):
+    download_filename = (
+        st.session_state.user_name if st.session_state.user_name else "探検者"
+    )
     with open(STATS_FILE, "rb") as f:
       st.download_button(
           label="📥 記録（CSV）を保存する",
           data=f,
-          file_name=f"理科探検きろく_{st.session_state.user_name}.csv",
+          file_name=f"理科探検きろく_{download_filename}.csv",
           mime="text/csv",
       )
 
@@ -551,31 +557,45 @@ if "チャット" in page:
   if current_thread["messages"][0]["role"] == "system":
     current_thread["messages"][0]["content"] = active_prompt
 
-  # ★ 1. 画面最上部に「お名前設定」エリアを配置（固定キーでモード切替時のリセット防止！）
+  # ★ 1. 画面最上部に分かりやすい「お名前設定エリア」を配置（初期は空文字＆プレースホルダー）
   with st.container():
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
     u_col1, u_col2 = st.columns([3, 1])
     with u_col1:
       input_name = st.text_input(
-          "👤 あなたの おなまえ（探検者の名前）"
+          "👤 まずは あなたの おなまえをおしえてね！"
           if is_child
-          else "👤 探検者（ユーザー名）",
+          else "👤 ユーザー名を入力してください",
           value=st.session_state.user_name,
+          placeholder="例: たろう" if is_child else "例: 山田太郎",
           key="global_user_name_input",
       )
       if input_name != st.session_state.user_name:
         st.session_state.user_name = input_name
         st.rerun()
+
     with u_col2:
       st.markdown("<br>", unsafe_allow_html=True)
-      st.caption(
-          f"✨ 設定中: **{st.session_state.user_name}**"
-          if is_child
-          else f"👤 現在: **{st.session_state.user_name}**"
-      )
+      if st.session_state.user_name.strip():
+        st.caption(
+            f"✨ **{st.session_state.user_name}** さんで準備完了！"
+            if is_child
+            else f"👤 設定中: **{st.session_state.user_name}**"
+        )
+      else:
+        st.markdown(
+            "<span style='color: #E65100; font-weight: bold; font-size: 12px;'>⚠️"
+            " お名前を入力してね！</span>",
+            unsafe_allow_html=True,
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
   # ヘッダー表示
+  display_user_name = (
+      st.session_state.user_name.strip()
+      if st.session_state.user_name.strip()
+      else "たんけんしゃ"
+  )
   header_title = (
       "🔍 わくわく<ruby>理科<rt>りか</rt></ruby><ruby>探検<rt>たんけん</rt></ruby>チャット"
       " 🎓"
@@ -583,9 +603,9 @@ if "チャット" in page:
       else "🔍 大人も楽しむ理科探検チャット 🎓"
   )
   header_sub = (
-      f"たんけんしゃ: {st.session_state.user_name} さん"
+      f"たんけんしゃ: {display_user_name} さん"
       if is_child
-      else f"探検者: {st.session_state.user_name} さん（オトナモード）"
+      else f"探検者: {display_user_name} さん（オトナモード）"
   )
 
   st.markdown(
