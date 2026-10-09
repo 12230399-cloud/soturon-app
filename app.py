@@ -9,6 +9,7 @@ import openai
 import pandas as pd
 from PIL import Image
 import streamlit as st
+import streamlit.components.v1 as components
 
 # 1. ページ基本設定
 st.set_page_config(
@@ -755,6 +756,24 @@ if "チャット" in page:
 
       except Exception as e:
         st.error(f"エラーが発生しました: {e}")
+
+  # 🔽 新しい回答位置へ自動スクロールするスクリプト（画面描画完了時）
+  components.html(
+      """
+      <script>
+          setTimeout(function() {
+              var mainEl = window.parent.document.querySelector('section.main');
+              if (mainEl) {
+                  mainEl.scrollTo({
+                      top: mainEl.scrollHeight,
+                      behavior: 'smooth'
+                  });
+              }
+          }, 150);
+      </script>
+      """,
+      height=0,
+  )
 
 # ==========================================
 # 📊 ページ2: 成長グラフ（記録レポート）画面
