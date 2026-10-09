@@ -40,17 +40,17 @@ CHILD_SYSTEM_PROMPT = """
 """
 
 ADULT_SYSTEM_PROMPT = """
-あなたは科学・生物学・農学の専門知識を持つ知的な学習パートナー「探検ハカセ（研究者モード）」です。
-大人の利用者や保護者、教員に対して、科学的根拠に基づいた詳細かつ正確な解説を提供します。
+あなたは自然科学の知識が豊富な親しみやすいパートナー「探検ハカセ（大人モード）」です。
+保護者や先生、大人の探検者に向けて、自然や生き物の魅力を少し深掘りした知識とともに、分かりやすく解説します。
 
 【写真（画像）の分析ルール】
-1. 生物・昆虫・植物・鉱物・自然現象等の名称や分類、特徴を精度高く分析・特定してください。
-2. 植物の病気や不調が疑われる場合は、原因（菌・ウイルス・害虫・生理障害・環境因子等）と、具体的な治療・育成対策（剪定、薬剤、水やり・日当たりの調整等）を詳細に説明してください。
+1. 生物・昆虫・植物・自然現象などの名前や特徴を特定・推測して解説してください。
+2. 植物の不調や病気などの場合は、考えられる原因と具体策（水やり、日照、お手入れなど）を丁寧にアドバイスしてください。
 
 【文体・表現ルール】
-1. 専門用語や一般的な漢字を使い、丁寧な敬体（〜です、〜ます）で記述してください。（ルビタグは使用しないでください）
-2. 結論だけでなく、なぜそうなるのかという科学的メカニズムや背景知識まで深掘りして分かりやすく解説してください。
-3. 返信の長さは200〜400文字程度で、必要に応じて追加の観察ポイントやアドバイスを添えてください。
+1. ルビタグは使わず、通常の漢字混じりの丁寧で親しみやすい日本語（です・ます調）で記述してください。
+2. 単なる名前の特定だけでなく、大人も「なるほど！」と思える豆知識や生態の面白さ、科学的な理由を添えて解説してください。
+3. 返信の長さは200〜300文字程度で、読んで知的好奇心が刺激されるようなトーンを心がけてください。
 """
 
 
@@ -116,20 +116,24 @@ if "uploader_key" not in st.session_state:
 
 
 # 新規スレッド作成用関数
-def create_new_thread(system_prompt):
+def create_new_thread(system_prompt, is_child):
   new_id = str(uuid.uuid4())
   thread_count = len(st.session_state.get("threads", {})) + 1
+  default_title = (
+      f"あたらしい おはなし {thread_count}"
+      if is_child
+      else f"新しいおはなし {thread_count}"
+  )
+  greeting = (
+      "新しい探検のスタートだね！🎓\nどんなことを ハカセに 聞いてみる？"
+      if is_child
+      else "こんにちは！探検ハカセです🎓\n気になる写真や、自然の「なぜ？」について気軽に質問してくださいね。"
+  )
   return new_id, {
-      "title": f"あたらしい おはなし {thread_count}",
+      "title": default_title,
       "messages": [
           {"role": "system", "content": system_prompt},
-          {
-              "role": "assistant",
-              "content": (
-                  "新しい探検のスタートだね！🎓\nどんなことを"
-                  " ハカセに 聞いてみる？"
-              ),
-          },
+          {"role": "assistant", "content": greeting},
       ],
   }
 
@@ -184,33 +188,113 @@ st.markdown(
 # --- サイドバーナビゲーション ---
 with st.sidebar:
   st.title("🧭 メニュー")
-  page = st.radio("ページを えらんでね", ["💬 チャット", "📊 成長グラフ"])
 
-  st.divider()
   st.header("🎭 モード設定")
   mode = st.radio(
-      "対話モード",
+      "表示・対話モード",
       ["👦 こどもモード", "🧑 オトナモード"],
       index=0,
-      help="オトナモードではルビがなくなり、より専門的で詳しい解説が返ってきます。",
+      help="オトナモードではルビがなくなり、大人も楽しめる少し詳しい解説になります。",
   )
+  is_child = "こども" in mode
 
-  # モードに応じたシステムプロンプトの選択
+  st.divider()
+
+  # 画面用ラベルの定義（自然で親しみやすい言葉にマイルド化）
+  labels = {
+      "nav_page": (
+          st.radio("ページ選択", ["💬 チャット", "📊 成長グラフ"])
+          if is_child
+          else st.radio("ページ選択", ["💬 チャット", "📊 記録レポート"])
+      ),
+      "user_name_label": (
+          "あなたの おなまえ" if is_child else "お名前（ユーザー名）"
+      ),
+      "btn_new_chat": (
+          "➕ あたらしい おはなし" if is_child else "➕ 新しいおはなし"
+      ),
+      "thread_list_title": (
+          "これまでの おはなし:" if is_child else "これまでの会話:"
+      ),
+      "uploader_label": (
+          "📷 しゃしんを えらぶ（選んだあと、下に文章を打ってね）"
+          if is_child
+          else "📷 写真を選ぶ（選んだあと、下にメッセージを入力してね）"
+      ),
+      "uploader_info": (
+          "📸"
+          " 写真が準備できました！下の入力欄に質問を書くか、たすけぶねボタンを押してね。"
+          if is_child
+          else (
+              "📸"
+              " 写真がセットされました！下の入力欄に聞きたいことを書いて送信してください。"
+          )
+      ),
+      "helper_caption": (
+          "💬 たすけぶねボタン（文字を打つのに困った時は押してね！）:"
+          if is_child
+          else "💬 クイック質問ボタン:"
+      ),
+      "btn1": "💡 ヒントちょうだい！" if is_child else "💡 詳しい観察のコツ",
+      "btn2": "❓ つぎのミッション！" if is_child else "❓ 深掘りミッション",
+      "btn3": (
+          "🔍 これ なにか教えて！" if is_child else "🔍 これについて詳しく！"
+      ),
+      "chat_input_ph": (
+          "ここに メッセージや しつもんを かこう！"
+          if is_child
+          else "質問やメッセージを入力してください..."
+      ),
+      "dash_title": (
+          f"📈 {st.session_state.get('current_user', '')} さんの せいちょう"
+          " レポート"
+          if is_child
+          else f"📈 {st.session_state.get('current_user', '')} さんの"
+          " 探検・タイピング記録"
+      ),
+      "metric_chars": (
+          "⭐ ぜんぶで うった もじ" if is_child else "⭐ トータル入力文字数"
+      ),
+      "metric_speed": (
+          "⚡ へいきん タイピング速度" if is_child else "⚡ 平均タイピング速度"
+      ),
+      "metric_vocab": (
+          "📚 つかった もじの 種類（語彙）"
+          if is_child
+          else "📚 使った文字・語彙数"
+      ),
+      "chart_speed": (
+          "⚡ タイピングスピードの へんか（文字/分）"
+          if is_child
+          else "⚡ タイピング速度の変化（文字/分）"
+      ),
+      "chart_vocab": (
+          "📚 つかえる もじの 広がり（累計）"
+          if is_child
+          else "📚 使える文字・語彙の広がり（累計）"
+      ),
+      "expander_history": (
+          "📝 これまでの 入力きろくを 見る" if is_child else "📝 これまでの入力履歴を見る"
+      ),
+  }
+
+  page = labels["nav_page"]
+
   active_prompt = (
-      CHILD_SYSTEM_PROMPT if "こども" in mode else ADULT_SYSTEM_PROMPT
+      CHILD_SYSTEM_PROMPT if is_child else ADULT_SYSTEM_PROMPT
   )
 
   st.divider()
   st.header("👤 ユーザー設定")
   user_name = st.text_input(
-      "あなたの おなまえ",
+      labels["user_name_label"],
       value="たろう",
       help="名前を変えると自分の記録が残るよ！",
   )
 
   # スレッド管理の初期化
   if "threads" not in st.session_state:
-    init_id, init_thread = create_new_thread(active_prompt)
+    init_id, init_thread = create_new_thread(active_prompt, is_child)
     st.session_state.threads = {init_id: init_thread}
     st.session_state.current_thread_id = init_id
 
@@ -229,7 +313,7 @@ with st.sidebar:
         title = (
             group["thread_title"].iloc[0]
             if "thread_title" in group.columns
-            else "過去のおはなし"
+            else ("過去のおはなし" if is_child else "過去の会話")
         )
         msgs = [{"role": "system", "content": active_prompt}]
         for _, row in group.iterrows():
@@ -243,12 +327,12 @@ with st.sidebar:
         st.session_state.threads = restored_threads
         st.session_state.current_thread_id = list(restored_threads.keys())[-1]
 
-  if page == "💬 チャット":
+  if "チャット" in page:
     st.divider()
-    st.header("💬 話題（チャット一覧）")
+    st.header("💬 会話履歴")
 
-    if st.button("➕ あたらしい おはなし", use_container_width=True):
-      new_id, new_thread = create_new_thread(active_prompt)
+    if st.button(labels["btn_new_chat"], use_container_width=True):
+      new_id, new_thread = create_new_thread(active_prompt, is_child)
       st.session_state.threads[new_id] = new_thread
       st.session_state.current_thread_id = new_id
       st.rerun()
@@ -257,7 +341,7 @@ with st.sidebar:
         tid: data["title"] for tid, data in st.session_state.threads.items()
     }
     selected_thread_id = st.radio(
-        "これまでの おはなし:",
+        labels["thread_list_title"],
         options=list(thread_options.keys()),
         format_func=lambda x: thread_options[x],
         index=list(thread_options.keys()).index(
@@ -296,26 +380,38 @@ with st.sidebar:
       "🧠 AIのモデル",
       ["gpt-4o", "gpt-4o-mini"],
       index=0,
-      help="gpt-4oを選ぶと画像識別や病気判定の精度が高くなります！",
+      help="gpt-4oを選ぶと画像識別や詳細解説の精度が高くなります！",
   )
 
 
 # ==========================================
 # 📄 ページ1: チャット画面
 # ==========================================
-if page == "💬 チャット":
+if "チャット" in page:
   current_thread = st.session_state.threads[st.session_state.current_thread_id]
 
-  # 現在のシステムプロンプトを最新のモード設定に同期
+  # システムプロンプトを現在のモードに同期
   if current_thread["messages"][0]["role"] == "system":
     current_thread["messages"][0]["content"] = active_prompt
 
   # ヘッダー表示
+  header_title = (
+      "🔍 わくわく<ruby>理科<rt>りか</rt></ruby><ruby>探検<rt>たんけん</rt></ruby>チャット"
+      " 🎓"
+      if is_child
+      else "🔍 大人も楽しむ理科探検チャット 🎓"
+  )
+  header_sub = (
+      f"たんけんしゃ: {user_name} さん"
+      if is_child
+      else f"探検者: {user_name} さん（オトナモード）"
+  )
+
   st.markdown(
       f"""
       <div class="chat-header">
-          <h2>🔍 {current_thread['title']} 🎓</h2>
-          <p>たんけんしゃ: {user_name} さん （{mode}）</p>
+          <h2>{header_title}</h2>
+          <p>{header_sub}</p>
       </div>
   """,
       unsafe_allow_html=True,
@@ -332,29 +428,35 @@ if page == "💬 チャット":
 
   # 📷 写真選択エリア
   uploaded_file = st.file_uploader(
-      "📷 しゃしんを えらぶ（選んだあと、下に文章を打ってね）",
+      labels["uploader_label"],
       type=["jpg", "jpeg", "png"],
       key=f"uploader_{st.session_state.uploader_key}",
   )
 
   if uploaded_file:
-    st.info(
-        "📸 写真が準備できました！下の入力欄に質問を書くか、たすけぶねボタンを押してね。"
-    )
+    st.info(labels["uploader_info"])
 
-  # 💬 たすけぶねボタン
-  st.caption("💬 たすけぶねボタン（文字を打つのに困った時は押してね！）:")
+  # 💬 補助ボタン
+  st.caption(labels["helper_caption"])
   col1, col2, col3 = st.columns(3)
   preset_input = None
-  if col1.button("💡 ヒントちょうだい！"):
-    preset_input = "ヒントをちょうだい！"
-  if col2.button("❓ つぎのミッション！"):
-    preset_input = "つぎのミッションをだして！"
-  if col3.button("🔍 これ なにか教えて！"):
-    preset_input = "これ（写真や疑問）について詳しく教えて！"
+  if col1.button(labels["btn1"]):
+    preset_input = "ヒントをちょうだい！" if is_child else "観察のコツやポイントを教えて！"
+  if col2.button(labels["btn2"]):
+    preset_input = (
+        "つぎのミッションをだして！"
+        if is_child
+        else "次に探検・観察してみるのにおすすめのテーマを教えて！"
+    )
+  if col3.button(labels["btn3"]):
+    preset_input = (
+        "これ（写真や疑問）について詳しく教えて！"
+        if is_child
+        else "これ（写真や疑問）について、大人向けに少し詳しく教えて！"
+    )
 
   # ✏️ 入力エリア
-  user_input = st.chat_input("ここに メッセージや しつもんを かこう！")
+  user_input = st.chat_input(labels["chat_input_ph"])
   if preset_input:
     user_input = preset_input
 
@@ -365,9 +467,9 @@ if page == "💬 チャット":
     else:
       # 初回発言時に自動で話題タイトルを設定
       if (
-          current_thread["title"].startswith("あたらしい おはなし")
-          and len(current_thread["messages"]) <= 2
-      ):
+          current_thread["title"].startswith("あたらしい")
+          or current_thread["title"].startswith("新しい")
+      ) and len(current_thread["messages"]) <= 2:
         short_title = user_input[:12] + ("..." if len(user_input) > 12 else "")
         current_thread["title"] = f"💬 {short_title}"
 
@@ -414,7 +516,9 @@ if page == "💬 チャット":
       try:
         client = openai.OpenAI(api_key=api_key)
         with st.chat_message("assistant", avatar="🎓"):
-          with st.spinner("ハカセが かんがえ中..."):
+          with st.spinner(
+              "ハカセが かんがえ中..." if is_child else "ハカセが調べ中..."
+          ):
             system_msg = [
                 m for m in current_thread["messages"] if m["role"] == "system"
             ]
@@ -459,18 +563,15 @@ if page == "💬 チャット":
         st.error(f"エラーが発生しました: {e}")
 
 # ==========================================
-# 📊 ページ2: 成長グラフ画面
+# 📊 ページ2: 成長グラフ（記録レポート）画面
 # ==========================================
-elif page == "📊 成長グラフ":
-  st.title(f"📈 {user_name} さんの せいちょう レポート")
+else:
+  st.title(labels["dash_title"])
 
   df_all = load_user_data(user_name)
 
   if df_all.empty:
-    st.info(
-        "まだ データがありません！チャットで ハカセと"
-        " お話ししてみてね！"
-    )
+    st.info("まだ データがありません！チャットで ハカセと お話ししてみてね！")
   else:
     df_user = (
         df_all[df_all["role"] == "user"]
@@ -488,16 +589,16 @@ elif page == "📊 成長グラフ":
       vocab_size = len(set(all_text))
 
       col1, col2, col3 = st.columns(3)
-      col1.metric("⭐ ぜんぶで うった もじ", f"{total_chars} もじ")
-      col2.metric("⚡ へいきん タイピング速度", f"{int(avg_speed)} もじ/分")
-      col3.metric("📚 つかった もじの 種類（語彙）", f"{vocab_size} 種類")
+      col1.metric(labels["metric_chars"], f"{total_chars} 文字")
+      col2.metric(labels["metric_speed"], f"{int(avg_speed)} 文字/分")
+      col3.metric(labels["metric_vocab"], f"{vocab_size} 種類")
 
       st.divider()
 
-      st.subheader("⚡ タイピングスピードの へんか（文字/分）")
+      st.subheader(labels["chart_speed"])
       st.line_chart(df_user.set_index("timestamp")["typing_speed"])
 
-      st.subheader("📚 つかえる もじの 広がり（累計）")
+      st.subheader(labels["chart_vocab"])
       vocab_growth = []
       current_vocab = set()
       for text in df_user["text"].dropna():
@@ -507,7 +608,7 @@ elif page == "📊 成長グラフ":
 
       st.line_chart(df_user.set_index("timestamp")["vocab_growth"])
 
-      with st.expander("📝 これまでの 入力きろくを 見る"):
+      with st.expander(labels["expander_history"]):
         display_cols = [
             "timestamp",
             "thread_title",
