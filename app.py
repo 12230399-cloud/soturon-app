@@ -21,6 +21,21 @@ st.set_page_config(
 
 STATS_FILE = "user_stats.csv"
 
+# --- 学年リスト ---
+GRADE_OPTIONS = [
+    "👦 小学1年生",
+    "👦 小学2年生",
+    "👦 小学3年生",
+    "👦 小学4年生",
+    "👦 小学5年生",
+    "👦 小学6年生",
+    "🧑 中学1年生",
+    "🧑 中学2年生",
+    "🧑 中学3年生",
+    "🏫 高校生",
+    "🎓 大人・一般",
+]
+
 # --- 雑学（トリビア）データベース ---
 TRIVIA_CHILD = [
     {
@@ -69,137 +84,100 @@ TRIVIA_CHILD = [
             "「赤ちゃんのほねは大人より多い」ことについて、どうしてくっつくのか詳しく教えて！"
         ),
     },
+]
+
+TRIVIA_ADVANCED = [
     {
         "card": (
-            "🐟 <b>トビウオは 空（そら）を 400mも"
-            " とぶ！</b><br>敵（てき）から にげるために、海（うみ）の上を"
-            " パトカーより はやく とべるんだよ。"
+            "⚛️ <b>水の電気分解と化学反応式</b><br>2H₂O → 2H₂ +"
+            " O₂。陰極には水素、陽極には酸素が2:1の気体積比で発生します。"
         ),
         "query": (
-            "「トビウオが空をとぶ」ことについて、どうやって飛んでいるのか詳しく教えて！"
+            "「水の電気分解の化学反応式とイオンの動き」について詳しく解説してください。"
         ),
     },
     {
         "card": (
-            "🍉 <b>スイカは「やさい」の"
-            " なかま！</b><br>甘（あま）くて フルーツみたいだけど、畑（はたけ）で"
-            " できるから「野菜（やさい）」なんだよ！"
+            "🌌 <b>宇宙空間における音波と電波</b><br>音波は疎密波（密度の波）のため真空を伝播しませんが、電波（電磁波）は真空でも届きます。"
         ),
         "query": (
-            "「スイカは野菜のなかま」ということについて、果物との違いを詳しく教えて！"
+            "「音波と電磁波の物理的な違いと宇宙での伝播」について詳しく解説してください。"
         ),
     },
     {
         "card": (
-            "🐙 <b>タコには 心臓（しんぞう）が"
-            " 3つある！</b><br>からだ全体に 血液（けつえき）を おくるために、3つの"
-            " 心臓が はたらいているんだよ。"
+            "🌿 <b>光合成と呼吸の化学平衡</b><br>6CO₂ + 6H₂O → C₆H₁₂O₆ +"
+            " 6O₂。植物も夜間は光合成を行わず呼吸のみを行います。"
         ),
         "query": (
-            "「タコには心臓が3つある」ことについて、どうして3つもあるのか詳しく教えて！"
+            "「光合成の明反応・暗反応および補償点・光飽和点」について詳しく教えてください。"
+        ),
+    },
+    {
+        "card": (
+            "🧪 <b>酸・塩基の中和熱とモル濃度</b><br>HCl + NaOH → NaCl +"
+            " H₂O + 56.5kJ。強酸と強塩基の中和熱は常にほぼ一定です。"
+        ),
+        "query": (
+            "「酸・塩基の中和反応と計算問題の解法ステップ」について例題付きで教えてください。"
+        ),
+    },
+    {
+        "card": (
+            "⚡ <b>オームの法則と合成抵抗</b><br>V = RI。"
+            " 直列回路では抵抗の和、並列回路では逆数の和の逆数となります。"
+        ),
+        "query": (
+            "「並列回路の合成抵抗の計算問題」を1問出題して、解法を解説してください！"
         ),
     },
 ]
 
-TRIVIA_ADULT = [
-    {
-        "card": (
-            "🌌 <b>宇宙空間には「音」が存在しない</b><br>音波を伝える媒体（空気）が存在しないため完全な静寂ですが、電波を音に変換すると惑星特有の音が聴こえます。"
-        ),
-        "query": (
-            "「宇宙空間には音が描かれない理由と電波変換の音」について、大人向けに詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🐛 <b>アゲハチョウの幼虫の臭い角の秘密</b><br>威嚇時に出す橙色の角（臭角）の匂いは、食べた柑橘類の葉の脂肪酸を体内で濃縮・合成したものです。"
-        ),
-        "query": (
-            "「アゲハチョウの幼虫がもつ臭角の化学的メカニズム」について、もう少し詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🍌 <b>バナナは樹木ではなく「巨大な草」</b><br>木に見える幹のような部分は、葉の柄が重なり合った「偽茎（ぎけい）」と呼ばれる草本構造です。"
-        ),
-        "query": (
-            "「バナナの偽茎構造と草本植物としての分類」について、詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🦦 <b>ラッコが手をつないで眠る理由</b><br>海流で沖に流されるのを防ぐため、仲間と手をつないだり、海藻（ジャイアントケルプ）を体に巻き付けて眠ります。"
-        ),
-        "query": (
-            "「ラッコの睡眠生態と海藻利用の習性」について、詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🦴 <b>赤ちゃんの骨の数は大人より約100個多い</b><br>誕生時は約300個の軟骨中心ですが、成長に伴って骨同士が結合し、大人になると約206個になります。"
-        ),
-        "query": (
-            "「乳幼児の骨の結合プロセス（骨化）と理由」について、詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🐟 <b>トビウオの滑空能力は時速70km</b><br>大型魚から逃れるため発達した胸ビレを広げ、水面を切って最大400m以上も空中を滑空できます。"
-        ),
-        "query": (
-            "「トビウオの滑空に必要な解剖学的特徴と流体力学」について、詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🍉 <b>スイカやメロンは植物学上「果実的野菜」</b><br>草本植物に実るため野菜に分類されますが、消費形態から「果実的野菜」とも呼ばれます。"
-        ),
-        "query": (
-            "「農林水産省の果実的野菜の定義と分類基準」について、詳しく解説してください。"
-        ),
-    },
-    {
-        "card": (
-            "🐙 <b>タコの心臓は3つ、血液は青い</b><br>全身に血を送る心臓1つのほか、エラに血を送る鰓心臓（えにしんぞう）が2つあり、銅を含んだ血で酸素を運ぶため青く見えます。"
-        ),
-        "query": (
-            "「タコの鰓心臓の役割とヘモシアニン（青い血液）の仕組み」について、詳しく解説してください。"
-        ),
-    },
-]
 
-# --- プロンプト定義 ---
-CHILD_SYSTEM_PROMPT = """
-あなたは小学3年生の理科の学習をサポートする親しみやすいパートナー「探検ハカセ」です。
-身近な自然や生き物、理科の不思議に興味を持てるよう優しく対話します。
+# --- 学年別プロンプト生成関数 ---
+def get_system_prompt(grade_name):
+  base_role = "あなたは自然科学の学習を支援する親しみやすいパートナー「探検ハカセ」です。"
 
-【写真（画像）が送られてきた場合ルール】
-1. 写真に写っているもの（生き物、虫、魚、植物、空など）の形・色・特徴をよく観察し、名前や種類を特定・推測して分かりやすく教えてあげてください。
-2. 植物の病気や不調の場合は、怖がらせないように理由とお世話のアドバイスを優しく教えてあげてください。
+  if "小学" in grade_name:
+    return f"""
+{base_role}
+【対象ユーザー】: {grade_name}（小学生）
 
-【重要：言葉遣いと漢字の制限】
-- 原則として「小学1年生〜3年生で習う漢字」のみを使用してください。
-- 4年生以上で習う難しい漢字や専門用語は使わず、ひらがなにするかルビタグを使ってふりがなを振ってください。
-- ルビの書き方例: <ruby>観察<rt>かんさつ</rt></ruby>、<ruby>病気<rt>びょうき</rt></ruby>、<ruby>特徴<rt>とくちょう</rt></ruby>
+【言葉遣い・漢字制限】
+1. 原則として「{grade_name}までに学校で習う漢字」のみを使用してください。
+2. それ以上の学年で習う漢字や難しい専門用語はひらがなにするか、ルビタグ（例: <ruby>観察<rt>かんさつ</rt></ruby>）を使用してください。
+3. 明るく優しい言葉遣い（〜だよ！、〜かな？）。
+4. 返信は100〜150文字程度にし、最後に『答えやすい質問』を1つ添えて会話を続けてください。
 
-【会話を長続きさせるためのルール】
-1. 明るくやさしい言葉遣い（〜だよ！、〜かな？、すごいね！）。
-2. 返信は100〜150文字程度でコンパクトにする。
-3. 必ず『具体的に答えやすい質問』で終わる（例：「どこで見つけたのかな？」「お水は毎日あげてるかな？」など）。
+【学習単元・写真アドバイス】
+- {grade_name}の理科単元（植物、昆虫、天体、テコ、電気など）に即した身近な例えで解説してください。
+- 写真が送られた場合は形や色の特徴をほめて観察の着眼点を教えてあげてください。
 """
+  elif "中学" in grade_name:
+    return f"""
+{base_role}
+【対象ユーザー】: {grade_name}（中学生向け）
 
-ADULT_SYSTEM_PROMPT = """
-あなたは自然科学の知識が豊富な親しみやすいパートナー「探検ハカセ（大人モード）」です。
-保護者や先生、大人の探検者に向けて、自然や生き物の魅力を少し深掘りした知識とともに、分かりやすく解説します。
+【言葉遣い・表現ルール】
+1. 丁寧な「です・ます調」で解説してください。過剰なルビは不要です。
+2. 化学式（H₂O, CuO, NaCl, 2H₂ + O₂ → 2H₂O）や物理公式（オームの法則 V=RI, 圧力 P=F/S, 密度 d=m/V）を積極的に活用し、理論的に解説してください。
 
-【写真（画像）の分析ルール】
-1. 生物・昆虫・植物・自然現象などの名前や特徴を特定・推測して解説してください。
-2. 植物の不調や病気などの場合は、考えられる原因と具体策（水やり、日照、お手入れなど）を丁寧にアドバイスしてください。
+【機能・計算問題対応】
+- ユーザーから「問題をだして」「計算問題をだして」と言われた場合、{grade_name}の理科（質量パーセント濃度、オームの法則、湿度、フックの法則など）の計算問題を1問出題し、ヒントやステップ解説を行ってください。
+- 写真（実験器具、生物、天体等）が送られた場合は、理科の単元に関連する科学的原理を含めて解説してください。
+"""
+  else:
+    return f"""
+{base_role}
+【対象ユーザー】: {grade_name}（高校生・大人・研究/分析）
 
-【文体・表現ルール】
-1. ルビタグは使わず、通常の漢字混じりの丁寧で親しみやすい日本語（です・ます調）で記述してください。
-2. 単なる名前の特定だけでなく、大人も「なるほど！」と思える豆知識や生態の面白さ、科学的な理由を添えて解説してください。
-3. 返信の長さは200〜300文字程度で、読んで知的好奇心が刺激されるようなトーンを心がけてください。
+【言葉遣い・表現ルール】
+1. 知的で論理的な「です・ます調」で記述します。
+2. 化学反応式、構造式、物理公式、SI単位系、国際命名法などを正確に用いて深掘り解説してください。
+
+【機能・計算問題対応】
+- 物理・化学（モル計算、反応熱、酸・塩基中和、力学、電磁気学等）の計算問題の解法解説や問題出題要請に柔軟に対応します。ステップバイステップで論理的に説明してください。
+- 写真が送信された場合、分類学、解剖学、物理化学的メカニズムに基づく深い考察を提供してください。
 """
 
 
@@ -215,7 +193,6 @@ def save_user_stat(
     role="user",
 ):
   now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-  # 名前が空の場合は「探検者」または「ゲスト」にする
   saved_name = user_name.strip() if user_name.strip() else "探検者"
   new_data = pd.DataFrame([{
       "timestamp": now,
@@ -262,7 +239,9 @@ def encode_image(image_bytes):
 
 # --- セッション初期化 ---
 if "user_name" not in st.session_state:
-  st.session_state.user_name = ""  # ★初期値を空文字に変更！
+  st.session_state.user_name = ""
+if "selected_grade" not in st.session_state:
+  st.session_state.selected_grade = GRADE_OPTIONS[2]  # 初期値: 小学3年生
 if "last_send_time" not in st.session_state:
   st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state:
@@ -271,19 +250,22 @@ if "trivia_seed" not in st.session_state:
   st.session_state.trivia_seed = random.randint(0, 1000)
 
 
-# 新規スレッド作成用関数
-def create_new_thread(system_prompt, is_child):
+def create_new_thread(system_prompt, grade_name):
   new_id = str(uuid.uuid4())
   thread_count = len(st.session_state.get("threads", {})) + 1
+  is_child = "小学" in grade_name
   default_title = (
       f"あたらしい おはなし {thread_count}"
       if is_child
-      else f"新しいおはなし {thread_count}"
+      else f"新しいテーマ {thread_count}"
   )
   greeting = (
-      "新しい探検のスタートだね！🎓\nどんなことを ハカセに 聞いてみる？"
+      f"こんにちは！【{grade_name}】向けの 探検スタートだよ！🎓\nどんなことを"
+      " ハカセに 聞いてみる？"
       if is_child
-      else "こんにちは！探検ハカセです🎓\n気になる写真や、自然の「なぜ？」について気軽に質問してくださいね。"
+      else (
+          f"こんにちは！探検ハカセです🎓【{grade_name}】モードで解説します。\n質問や写真の解析、化学式・計算問題など何でも聞いてくださいね。"
+      )
   )
   return new_id, {
       "title": default_title,
@@ -358,23 +340,26 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-
 # --- サイドバーナビゲーション ---
 with st.sidebar:
   st.title("🧭 メニュー")
 
-  st.header("🎭 モード設定")
-  mode = st.radio(
-      "表示・対話モード",
-      ["👦 こどもモード", "🧑 オトナモード"],
-      index=0,
-      help="オトナモードではルビがなくなり、大人も楽しめる少し詳しい解説になります。",
+  st.header("🎓 学年・対象設定")
+  selected_grade = st.selectbox(
+      "学年を選んでね",
+      GRADE_OPTIONS,
+      index=GRADE_OPTIONS.index(st.session_state.selected_grade),
+      help="学年に合わせて使う漢字・計算問題・専門用語の深さが変化します！",
   )
-  is_child = "こども" in mode
+  if selected_grade != st.session_state.selected_grade:
+    st.session_state.selected_grade = selected_grade
+    st.rerun()
+
+  is_child = "小学" in selected_grade
+  active_prompt = get_system_prompt(selected_grade)
 
   st.divider()
 
-  # 画面用ラベルの定義
   labels = {
       "nav_page": (
           st.radio("ページ選択", ["💬 チャット", "📊 成長グラフ"])
@@ -401,20 +386,10 @@ with st.sidebar:
               " 写真がセットされました！下の入力欄に聞きたいことを書いて送信してください。"
           )
       ),
-      "helper_caption": (
-          "💬 たすけぶねボタン（文字を打つのに困った時は押してね！）:"
-          if is_child
-          else "💬 クイック質問ボタン:"
-      ),
-      "btn1": "💡 ヒントちょうだい！" if is_child else "💡 詳しい観察のコツ",
-      "btn2": "❓ つぎのミッション！" if is_child else "❓ 深掘りミッション",
-      "btn3": (
-          "🔍 これ なにか教えて！" if is_child else "🔍 これについて詳しく！"
-      ),
       "chat_input_ph": (
           "ここに メッセージや しつもんを かこう！"
           if is_child
-          else "質問やメッセージを入力してください..."
+          else "質問やメッセージ、計算問題の依頼などを入力..."
       ),
       "dash_title": (
           f"📈 {st.session_state.user_name if st.session_state.user_name else '探検者'} さんの せいちょう レポート"
@@ -448,17 +423,14 @@ with st.sidebar:
   }
 
   page = labels["nav_page"]
-  active_prompt = (
-      CHILD_SYSTEM_PROMPT if is_child else ADULT_SYSTEM_PROMPT
-  )
 
-  # スレッド管理の初期化
+  # スレッド初期化
   if "threads" not in st.session_state:
-    init_id, init_thread = create_new_thread(active_prompt, is_child)
+    init_id, init_thread = create_new_thread(active_prompt, selected_grade)
     st.session_state.threads = {init_id: init_thread}
     st.session_state.current_thread_id = init_id
 
-  # ユーザー切り替え時の過去データ復元
+  # ユーザー切り替え復元
   if (
       "current_user" not in st.session_state
       or st.session_state.current_user != st.session_state.user_name
@@ -473,7 +445,7 @@ with st.sidebar:
         title = (
             group["thread_title"].iloc[0]
             if "thread_title" in group.columns
-            else ("過去のおはなし" if is_child else "過去の会話")
+            else ("過去の会話" if not is_child else "過去のおはなし")
         )
         msgs = [{"role": "system", "content": active_prompt}]
         for _, row in group.iterrows():
@@ -492,7 +464,7 @@ with st.sidebar:
     st.header("💬 会話履歴")
 
     if st.button(labels["btn_new_chat"], use_container_width=True):
-      new_id, new_thread = create_new_thread(active_prompt, is_child)
+      new_id, new_thread = create_new_thread(active_prompt, selected_grade)
       st.session_state.threads[new_id] = new_thread
       st.session_state.current_thread_id = new_id
       st.rerun()
@@ -543,7 +515,7 @@ with st.sidebar:
       "🧠 AIのモデル",
       ["gpt-4o", "gpt-4o-mini"],
       index=0,
-      help="gpt-4oを選ぶと画像識別や詳細解説の精度が高くなります！",
+      help="gpt-4oを選ぶと画像識別や詳細な計算問題の精度が高くなります！",
   )
 
 
@@ -553,17 +525,17 @@ with st.sidebar:
 if "チャット" in page:
   current_thread = st.session_state.threads[st.session_state.current_thread_id]
 
-  # システムプロンプトを現在のモードに同期
+  # システムプロンプトを現在の学年に同期
   if current_thread["messages"][0]["role"] == "system":
     current_thread["messages"][0]["content"] = active_prompt
 
-  # ★ 1. 画面最上部に分かりやすい「お名前設定エリア」を配置（初期は空文字＆プレースホルダー）
+  # お名前入力エリア
   with st.container():
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
     u_col1, u_col2 = st.columns([3, 1])
     with u_col1:
       input_name = st.text_input(
-          "👤 まずは あなたの おなまえをおしえてね！"
+          "👤 あなたの おなまえをおしえてね！"
           if is_child
           else "👤 ユーザー名を入力してください",
           value=st.session_state.user_name,
@@ -594,19 +566,17 @@ if "チャット" in page:
   display_user_name = (
       st.session_state.user_name.strip()
       if st.session_state.user_name.strip()
-      else "たんけんしゃ"
+      else "探検者"
   )
   header_title = (
-      "🔍 わくわく<ruby>理科<rt>りか</rt></ruby><ruby>探検<rt>たんけん</rt></ruby>チャット"
-      " 🎓"
-      if is_child
-      else "🔍 大人も楽しむ理科探検チャット 🎓"
+      f"🔍 理科探検チャット （{selected_grade}）🎓"
+      if not is_child
+      else (
+          f"🔍 わくわく<ruby>理科<rt>りか</rt></ruby><ruby>探検<rt>たんけん</rt></ruby>チャット"
+          f"（{selected_grade}） 🎓"
+      )
   )
-  header_sub = (
-      f"たんけんしゃ: {display_user_name} さん"
-      if is_child
-      else f"探検者: {display_user_name} さん（オトナモード）"
-  )
+  header_sub = f"たんけんしゃ: {display_user_name} さん"
 
   st.markdown(
       f"""
@@ -618,8 +588,8 @@ if "チャット" in page:
       unsafe_allow_html=True,
   )
 
-  # 💡 きょうの理科トリビア（3選）表示セクション
-  trivia_db = TRIVIA_CHILD if is_child else TRIVIA_ADULT
+  # 💡 トリビアセクション（学年にあわせて変化）
+  trivia_db = TRIVIA_CHILD if is_child else TRIVIA_ADVANCED
   random.seed(st.session_state.trivia_seed)
   selected_trivia = random.sample(trivia_db, min(3, len(trivia_db)))
 
@@ -628,7 +598,7 @@ if "チャット" in page:
     st.markdown(
         "<b>💡 きょうの 理科トリビア（3選）:</b>"
         if is_child
-        else "<b>💡 本日の科学豆知識（3選）:</b>",
+        else "<b>💡 本日の科学・理科豆知識（3選）:</b>",
         unsafe_allow_html=True,
     )
   with t_col2:
@@ -636,7 +606,6 @@ if "チャット" in page:
       st.session_state.trivia_seed = random.randint(0, 1000)
       st.rerun()
 
-  # 3つのかわるがわる雑学カード ＋「詳しく聞く」ボタン
   preset_input = None
   c1, c2, c3 = st.columns(3)
   cols = [c1, c2, c3]
@@ -655,14 +624,13 @@ if "チャット" in page:
 
   st.divider()
 
-  # 履歴表示（システムメッセージ除く）
+  # 履歴表示
   non_system_msgs = [
       m for m in current_thread["messages"] if m["role"] != "system"
   ]
   for idx, msg in enumerate(non_system_msgs):
     avatar = "🎓" if msg["role"] == "assistant" else "👦"
 
-    # ★最新のハカセ（assistant）回答の「冒頭（直前）」にジャンプ目印を設置
     if (
         msg["role"] == "assistant"
         and idx == len(non_system_msgs) - 1
@@ -677,35 +645,61 @@ if "チャット" in page:
         st.image(msg["image"], use_container_width=True)
       st.markdown(msg["content"], unsafe_allow_html=True)
 
-  # 📷 写真選択エリア
+  # 📷 写真選択
   uploaded_file = st.file_uploader(
       labels["uploader_label"],
       type=["jpg", "jpeg", "png"],
       key=f"uploader_{st.session_state.uploader_key}",
   )
-
   if uploaded_file:
     st.info(labels["uploader_info"])
 
-  # 💬 補助ボタン
-  st.caption(labels["helper_caption"])
+  # 💬 学年別のクイック質問ボタン
+  st.caption("💬 クイック質問ボタン:")
   col1, col2, col3 = st.columns(3)
-  if col1.button(labels["btn1"]):
-    preset_input = "ヒントをちょうだい！" if is_child else "観察のコツやポイントを教えて！"
-  if col2.button(labels["btn2"]):
-    preset_input = (
-        "つぎのミッションをだして！"
-        if is_child
-        else "次に探検・観察してみるのにおすすめのテーマを教えて！"
+
+  if is_child:
+    btn1_txt, btn2_txt, btn3_txt = (
+        "💡 ヒントちょうだい！",
+        "❓ つぎのミッション！",
+        "🔍 これ なにか教えて！",
     )
-  if col3.button(labels["btn3"]):
-    preset_input = (
-        "これ（写真や疑問）について詳しく教えて！"
-        if is_child
-        else "これ（写真や疑問）について、大人向けに少し詳しく教えて！"
+    req1, req2, req3 = (
+        "ヒントをちょうだい！",
+        "つぎの探検ミッションをだして！",
+        "これ（写真や疑問）について詳しく教えて！",
+    )
+  elif "中学" in selected_grade:
+    btn1_txt, btn2_txt, btn3_txt = (
+        "🧪 計算問題をだして！",
+        "⚛️ 化学式・理論の解説",
+        "💡 実験・観察のポイント",
+    )
+    req1, req2, req3 = (
+        f"{selected_grade}の理科の計算問題を1問出題して！",
+        "中学理科で習う重要な化学反応式について分かりやすく解説して！",
+        "理科の実験や観察で注意すべきポイントやコツを教えて！",
+    )
+  else:
+    btn1_txt, btn2_txt, btn3_txt = (
+        "📐 理論・計算問題を出題",
+        "🔬 専門メカニズムの深掘り",
+        "💡 実験・研究の着眼点",
+    )
+    req1, req2, req3 = (
+        f"{selected_grade}レベルの物理または化学の計算問題を1問出題して！",
+        "このテーマについて、化学反応式や物理法則を用いて深掘り解説して！",
+        "この自然現象や実験における科学的な観察の着眼点を詳しく教えて！",
     )
 
-  # ✏️ 入力エリア
+  if col1.button(btn1_txt):
+    preset_input = req1
+  if col2.button(btn2_txt):
+    preset_input = req2
+  if col3.button(btn3_txt):
+    preset_input = req3
+
+  # 入力エリア
   user_input = st.chat_input(labels["chat_input_ph"])
   if preset_input:
     user_input = preset_input
@@ -810,7 +804,7 @@ if "チャット" in page:
       except Exception as e:
         st.error(f"エラーが発生しました: {e}")
 
-  # 🎯 最新の回答の冒頭（#latest-reply-start）へピッタリ滑らかジャンプするJavaScript
+  # 最新回答冒頭へ自動ジャンプ
   components.html(
       """
       <script>
