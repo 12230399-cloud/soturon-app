@@ -2,7 +2,6 @@ import base64
 from datetime import datetime, date
 import io
 import os
-import random
 import time
 import uuid
 import json
@@ -32,16 +31,19 @@ GRADE_OPTIONS = [
     "🏫 高校生", "🎓 大人・一般",
 ]
 
-# ==========================================
-# 1. 初期設定と定数
-# ==========================================
-# (st.set_page_config や 定数などの記述はそのまま残します)
-
-# --- JSONファイルから実験と豆知識データを読み込む ---
-with open("data.json", "r", encoding="utf-8") as f:
-    json_data = json.load(f)
-    EXPERIMENTS = json_data["EXPERIMENTS"]
-    TRIVIA = json_data["TRIVIA"]
+# APIキー未入力時のダミーデータ
+DEFAULT_CONTENT = {
+    "experiment": {
+        "title": "🔑 APIキーをいれてね",
+        "desc": "左のメニューからAPIキーを設定すると、ハカセが今日の実験と豆知識を考えてくれるよ！"
+    },
+    "trivia": {
+        "物理": "APIキーを入れると豆知識が見られるよ！",
+        "化学": "APIキーを入れると豆知識が見られるよ！",
+        "生物": "APIキーを入れると豆知識が見られるよ！",
+        "地学・宇宙": "APIキーを入れると豆知識が見られるよ！"
+    }
+}
 
 # ==========================================
 # 2. 関数定義
@@ -54,6 +56,37 @@ def get_grade_category(grade_name):
         return "小学高学年"
     else:
         return "中学生以上"
+
+# --- 毎日のコンテンツをAIに生成させる関数 ---
+def generate_daily_content(api_key, grade_name, model_name, seed_date):
+    grade_cat = get_grade_category(grade_name)
+    system_prompt = f"""あなたは理科の専門家です。対象読者（{grade_cat}）に合わせて、家庭で安全にできる1日5分の簡単な理科の実験1つと、4分野の豆知識をJSON形式で生成してください。
+毎日新しい内容になるように、多様なテーマから選んでください。（今日の日付: {seed_date}）
+
+以下のJSONフォーマットで出力してください。
+{{
+  "experiment": {{
+    "title": "実験のタイトル（絵文字を含む）",
+    "desc": "実験の簡単な手順や解説（50〜80文字程度）"
+  }},
+  "trivia": {{
+    "物理": "物理に関する驚きの豆知識（50文字程度）",
+    "化学": "化学に関する驚きの豆知識（50文字程度）",
+    "生物": "生物に関する驚きの豆知識（50文字程度）",
+    "地学・宇宙": "地学・宇宙に関する驚きの豆知識（50文字程度）"
+  }}
+}}"""
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        res = client.chat.completions.create(
+            model=model_name,
+            messages=[{"role": "system", "content": system_prompt}],
+            response_format={"type": "json_object"}, # 確実にJSONで返させる
+            temperature=0.7 # 少し高めにしてバリエーションを出す
+        )
+        return json.loads(res.choices[0].message.content)
+    except Exception as e:
+        return None
 
 # --- 連続記録（ストリーク）管理 ---
 def load_streaks():
@@ -143,9 +176,12 @@ if "user_name" not in st.session_state: st.session_state.user_name = ""
 if "selected_grade" not in st.session_state: st.session_state.selected_grade = GRADE_OPTIONS[2]
 if "last_send_time" not in st.session_state: st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
-if "daily_seed" not in st.session_state: st.session_state.daily_seed = int(date.today().strftime("%Y%m%d"))
 if "suggested_questions" not in st.session_state: st.session_state.suggested_questions = []
 if "auto_send_msg" not in st.session_state: st.session_state.auto_send_msg = None
+
+# AI自動生成キャッシュ用のステート
+if "daily_content" not in st.session_state: st.session_state.daily_content = None
+if "content_date_grade" not in st.session_state: st.session_state.content_date_grade = ""
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -230,32 +266,61 @@ if "チャット" in page:
             st.success(f"🔥 実験れんぞく: {get_streak(st.session_state.user_name)} 日目！")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# 日替わり要素の決定 (乱数シードを日付で固定)
-    random.seed(st.session_state.daily_seed)
-    
-    # 1. 学年別 1日5分 おうち実験
-    exp_cat = get_grade_category(st.session_state.selected_grade)
-    todays_exp = random.choice(EXPERIMENTS[exp_cat])
-    
-    # 2. 分野別 豆知識
-    trivia_categories = list(TRIVIA.keys())
-    todays_trivia_cat = random.choice(trivia_categories)
-    todays_trivia = random.choice(TRIVIA[todays_trivia_cat])
+    # ---------------------------------------------------------
+    # 日替わり要素の自動生成 (API経由)
+    # ---------------------------------------------------------
+    today_str = date.today().isoformat()
+    current_state_key = f"{today_str}_{st.session_state.selected_grade}_{selected_model}"
 
-    # 実験と豆知識のカード表示
+    if not api_key:
+        daily_data = DEFAULT_CONTENT
+    else:
+        # 日付や学年、モデルが変わった場合、またはまだ生成されていない場合は新しく生成する
+        if st.session_state.content_date_grade != current_state_key or st.session_state.daily_content is None:
+            with st.spinner("🧠 ハカセが今日の実験と豆知識を考え中... (数秒かかります)"):
+                new_data = generate_daily_content(api_key, st.session_state.selected_grade, selected_model, today_str)
+                if new_data:
+                    st.session_state.daily_content = new_data
+                    st.session_state.content_date_grade = current_state_key
+                    daily_data = new_data
+                else:
+                    st.error("コンテンツの生成に失敗しちゃった！もう一度画面を読み込むか、APIキーを確認してね。")
+                    daily_data = DEFAULT_CONTENT
+        else:
+            daily_data = st.session_state.daily_content
+
+    todays_exp = daily_data["experiment"]
+    todays_trivias = daily_data["trivia"]
+    exp_cat = get_grade_category(st.session_state.selected_grade)
+
+    # 実験カード表示
     st.markdown(f"""
         <div class="exp-card">
             <h4 style="margin-top:0;">⏱️ 1日5分！本日のおうち実験（{exp_cat}向け）</h4>
-            <b>{todays_exp["title"]}</b><br>{todays_exp["desc"]}<br>
+            <b>{todays_exp.get("title", "実験タイトル")}</b><br>{todays_exp.get("desc", "説明がありません")}<br>
             <span style="font-size: 13px; color: #555;">※実験をやったら、下の入力欄に「実験できた！」「結果は〇〇だった！」と報告して連続記録をのばそう！</span>
         </div>
-        <div class="trivia-card">
-            <h4 style="margin-top:0;">💡 今日の豆知識【{todays_trivia_cat}】</h4>
-            {todays_trivia}
-        </div>
     """, unsafe_allow_html=True)
+
+    # 豆知識カード表示（4ジャンル ＋ 詳しく聞くボタン）
+    st.markdown('<div class="trivia-card"><h4 style="margin-top:0; margin-bottom:15px;">💡 今日の豆知識</h4>', unsafe_allow_html=True)
     
-    # チャット履歴表示
+    for cat, trivia_text in todays_trivias.items():
+        col_text, col_btn = st.columns([3, 1])
+        with col_text:
+            st.markdown(f"**{cat}**<br>{trivia_text}", unsafe_allow_html=True)
+        with col_btn:
+            # 詳しく聞くボタン
+            if st.button("詳しく聞く！", key=f"trivia_btn_{cat}"):
+                st.session_state.auto_send_msg = f"「{trivia_text}」という豆知識について、もっと詳しく教えて！"
+                st.rerun()
+        st.markdown("<hr style='margin: 10px 0; border: none; border-top: 1px dashed #90CAF9;'>", unsafe_allow_html=True)
+        
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ---------------------------------------------------------
+    # チャット履歴とUI
+    # ---------------------------------------------------------
     non_system_msgs = [m for m in current_thread["messages"] if m["role"] != "system"]
     for msg in non_system_msgs:
         with st.chat_message(msg["role"], avatar="🎓" if msg["role"] == "assistant" else "👦"):
