@@ -75,7 +75,7 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
 {{
   "experiment": {{
     "title": "実験のタイトル（絵文字を含む）",
-    "desc": "実験の簡単な手順や解説（50〜80文字程度）"
+    "desc": "実験の簡単な手順（50〜80文字程度）。※ユーザーに自分で結果を確かめてもらうため、実験の結果がどうなるかは絶対に書かないでください！"
   }},
   "problem": {{
     "title": "🧪 今日の挑戦問題（物理・化学など）",
@@ -164,7 +164,7 @@ def load_user_data(user_name):
 
 # --- プロンプト・画像処理 ---
 def get_system_prompt(grade_name):
-    base_role = "あなたは自然科学の学習を支援する親しみやすいパートナー「探検ハカセ」です。"
+    base_role = "あなたは自然科学の学習を支援する親しみやすいパートナー「探検ハカセ」です。\n【重要】ユーザーが「今日の実験」の結果を報告したり、「今日の挑戦問題」の答えを送ってきたら、大げさに褒めてから正解発表と「なぜそうなるのか」の解説をしてください。"
     qa_instruction = "\n【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。\n例:\n---\n1. なぜ〇〇は△△になるの？\n2. 〇〇以外の条件だとどうなる？\n3. 〇〇の仕組みを詳しく教えて！"
 
     if "小学" in grade_name:
@@ -200,7 +200,7 @@ def create_new_thread(system_prompt, grade_name):
     thread_count = len(st.session_state.get("threads", {})) + 1
     is_child = "小学" in grade_name
     default_title = f"あたらしい おはなし {thread_count}" if is_child else f"新しいテーマ {thread_count}"
-    greeting = f"こんにちは！【{grade_name}】向けの 探検スタートだよ！🎓\nどんなことを ハカセに 聞いてみる？" if is_child else f"こんにちは！探検ハカセです🎓【{grade_name}】モードで解説します。計算問題の答えもここで教えてね！"
+    greeting = f"こんにちは！【{grade_name}】向けの 探検スタートだよ！🎓\nどんなことを ハカセに 聞いてみる？\n\n（今日の実験の結果や、問題の答えもここで教えてね！）" if is_child else f"こんにちは！探検ハカセです🎓【{grade_name}】モードで解説します。\n\n今日の実験結果や計算問題の答えも、ここで教えてくださいね！"
     return new_id, {"title": default_title, "messages": [{"role": "system", "content": system_prompt}, {"role": "assistant", "content": greeting}]}
 
 # CSSスタイル
@@ -283,6 +283,7 @@ if "チャット" in page:
     # ---------------------------------------------------------
     today_str = date.today().isoformat()
     current_state_key = f"{today_str}_{st.session_state.selected_grade}_{selected_model}"
+    is_child = "小学" in st.session_state.selected_grade
 
     if not api_key:
         daily_data = DEFAULT_CONTENT
@@ -308,33 +309,39 @@ if "チャット" in page:
     col_daily1, col_daily2 = st.columns(2)
     
     with col_daily1:
-        # 実験カード表示
         st.markdown(f"""
             <div class="exp-card">
                 <h5 style="margin-top:0;">⏱️ 本日の実験（{exp_cat}向け）</h5>
                 <b>{todays_exp.get("title", "実験タイトル")}</b><br>
                 <span style="font-size: 14px;">{todays_exp.get("desc", "説明")}</span>
+                <div style="margin-top: 5px; font-size: 12px; color: #d32f2f;">
+                    ※結果がどうなったか、チャットでハカセに教えてね！
+                </div>
             </div>
         """, unsafe_allow_html=True)
     
     with col_daily2:
-        # 計算問題カード表示（追加した機能！）
         st.markdown(f"""
             <div class="prob-card">
                 <h5 style="margin-top:0;">{todays_prob.get("title", "🧪 今日の挑戦問題")}</h5>
                 <b style="font-size: 14px;">Q: {todays_prob.get("question", "問題文")}</b><br>
                 <span style="font-size: 13px; color: #6a1b9a;">💡 ヒント: {todays_prob.get("hint", "ヒント")}</span>
+                <div style="margin-top: 5px; font-size: 12px; color: #d32f2f;">
+                    ※答えがわかったらチャットで教えてね！
+                </div>
             </div>
         """, unsafe_allow_html=True)
 
-    # 豆知識カード表示（折りたたみ式できれいに！）
-    st.markdown('<h5 style="margin-top:10px;">💡 今日の豆知識（タップで開く）</h5>', unsafe_allow_html=True)
-    
-    # 4つの豆知識を2列に分けて配置する
+    # 豆知識カード表示（小学生は「物理」「化学」を隠す。そして最初から開く）
+    st.markdown('<h5 style="margin-top:10px;">💡 今日の豆知識</h5>', unsafe_allow_html=True)
     t_cols = st.columns(2)
     for idx, (cat, trivia_text) in enumerate(todays_trivias.items()):
         with t_cols[idx % 2]:
-            with st.expander(f"📚 【{cat}】の豆知識"):
+            # 小学生のときはカテゴリ名を「豆知識 1, 2...」に変更
+            expander_title = f"📚 豆知識 {idx+1}" if is_child else f"📚 【{cat}】の豆知識"
+            
+            # expanded=True で最初から開いておく
+            with st.expander(expander_title, expanded=True):
                 st.markdown(f"> {trivia_text}")
                 if st.button("🗣️ ハカセに詳しく聞く", key=f"trivia_btn_{cat}"):
                     st.session_state.auto_send_msg = f"「{trivia_text}」という豆知識について、もっと詳しく教えて！"
@@ -363,7 +370,7 @@ if "チャット" in page:
                 st.rerun()
 
     uploaded_file = st.file_uploader("📷 しゃしんを えらぶ", type=["jpg", "jpeg", "png"], key=f"uploader_{st.session_state.uploader_key}")
-    user_input = st.chat_input("ここに メッセージや 答えを かこう！")
+    user_input = st.chat_input("ここに メッセージや 実験のけっかを かこう！")
     
     if st.session_state.auto_send_msg:
         user_input = st.session_state.auto_send_msg
@@ -390,7 +397,6 @@ if "チャット" in page:
                 text=user_input
             )
 
-            # 実験報告か、問題の答えらしき文字があったらストリーク追加
             if any(word in user_input for word in ["実験", "できた", "結果", "やった", "答え", "わかった"]):
                 if st.session_state.user_name.strip():
                     update_streak(st.session_state.user_name)
