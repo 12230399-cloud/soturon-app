@@ -194,7 +194,7 @@ def encode_image(image_bytes):
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # ==========================================
-# 3. セッション管理
+# 3. セッション管理とスタイル
 # ==========================================
 if "user_name" not in st.session_state: st.session_state.user_name = ""
 if "selected_grade" not in st.session_state: st.session_state.selected_grade = GRADE_OPTIONS[2]
@@ -208,7 +208,6 @@ if "content_date_grade" not in st.session_state: st.session_state.content_date_g
 if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
 if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
 if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
-if "show_tutorial" not in st.session_state: st.session_state.show_tutorial = False
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -230,11 +229,60 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. サイドバー
+# 4. 初回登録画面（オンボーディング）
+# ==========================================
+# 名前がない場合は、ここでウェルカム画面を出して以降の描画をストップする
+if not st.session_state.user_name.strip():
+    st.title("🌟 わくわく理科探検チャットへようこそ！")
+    
+    st.markdown('<div class="user-card">', unsafe_allow_html=True)
+    st.info("👋 はじめまして！探検ハカセの研究所へようこそ。まずはあなたのことを教えてね！")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        input_name = st.text_input("👤 あなたの おなまえ（ニックネーム）", key="first_name_input")
+    with col2:
+        input_grade = st.selectbox("🎓 学年を選んでね", GRADE_OPTIONS, index=2, key="first_grade_input")
+        
+    st.markdown("""
+    ### 🎓 アプリの使い方
+    1. **チャットで話す**: 今日の実験の結果やクイズの答えをチャットで教えたり、わからないことを質問してみよう！
+    2. **クイズ道場**: メニューから「クイズ道場」に切り替えて、4択問題にチャレンジ！
+    3. **設定の変更**: 始めた後でも、左のメニューから学年やハカセの性格はいつでも変えられるよ。
+    """)
+    
+    if st.button("🚀 この設定で探検をはじめる！", type="primary", use_container_width=True):
+        if input_name.strip():
+            st.session_state.user_name = input_name
+            st.session_state.selected_grade = input_grade
+            st.rerun() # 登録できたら画面を再読み込みしてメイン画面へ！
+        else:
+            st.error("👆 おなまえを入力してね！")
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.stop() # 名前が登録されるまで、下のサイドバーやメイン画面は表示しない！
+
+# ==========================================
+# 5. メイン画面のヘッダー (登録後の名前・連続記録)
+# ==========================================
+st.markdown('<div class="user-card">', unsafe_allow_html=True)
+u_col1, u_col2 = st.columns([2, 1])
+with u_col1:
+    edit_name = st.text_input("👤 おなまえ", value=st.session_state.user_name, key="global_user_name_input")
+    if edit_name != st.session_state.user_name and edit_name.strip():
+        st.session_state.user_name = edit_name
+        st.rerun()
+with u_col2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.success(f"🔥 チャット連続記録: {get_streak(st.session_state.user_name)} 日目！")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ==========================================
+# 6. サイドバー
 # ==========================================
 with st.sidebar:
     st.title("🧭 メニュー")
-    selected_grade = st.selectbox("学年を選んでね", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
+    selected_grade = st.selectbox("学年を変える", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
     selected_persona = st.selectbox("ハカセの性格", PERSONA_OPTIONS, index=PERSONA_OPTIONS.index(st.session_state.selected_persona))
     
     if selected_grade != st.session_state.selected_grade or selected_persona != st.session_state.selected_persona:
@@ -247,19 +295,19 @@ with st.sidebar:
         st.session_state.suggested_questions = []
         st.rerun()
 
-    active_prompt = get_system_prompt(selected_grade, selected_persona)
+    active_prompt = get_system_prompt(st.session_state.selected_grade, st.session_state.selected_persona)
     st.divider()
     page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場", "📊 学習記録レポート"])
 
     if "threads" not in st.session_state:
-        init_id, init_thread = create_new_thread(active_prompt, selected_grade)
+        init_id, init_thread = create_new_thread(active_prompt, st.session_state.selected_grade)
         st.session_state.threads = {init_id: init_thread}
         st.session_state.current_thread_id = init_id
 
     if "チャット" in page:
         st.divider()
         if st.button("➕ あたらしい おはなし", use_container_width=True):
-            new_id, new_thread = create_new_thread(active_prompt, selected_grade)
+            new_id, new_thread = create_new_thread(active_prompt, st.session_state.selected_grade)
             st.session_state.threads[new_id] = new_thread
             st.session_state.current_thread_id = new_id
             st.session_state.suggested_questions = []
@@ -275,62 +323,7 @@ with st.sidebar:
     selected_model = st.selectbox("🧠 AIのモデル", ["gpt-4o", "gpt-4o-mini"], index=0)
 
 # ==========================================
-# 5. ヘッダー共通 (名前入力と新規ユーザー判定)
-# ==========================================
-st.markdown('<div class="user-card">', unsafe_allow_html=True)
-u_col1, u_col2 = st.columns([2, 1])
-with u_col1:
-    input_name = st.text_input("👤 あなたの おなまえ", value=st.session_state.user_name, key="global_user_name_input")
-    if input_name != st.session_state.user_name:
-        # 新しい名前が入力された場合、過去の記録があるかチェック
-        if input_name.strip():
-            streaks = load_json(STREAK_FILE)
-            if input_name not in streaks:
-                st.session_state.show_tutorial = True
-        st.session_state.user_name = input_name
-        st.rerun()
-with u_col2:
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.session_state.user_name.strip():
-        st.success(f"🔥 チャット連続記録: {get_streak(st.session_state.user_name)} 日目！")
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ----------------------------------------------------
-# ⚠️ 名前の入力がない場合は、ここでウェルカム画面を出してストップ
-# ----------------------------------------------------
-if not st.session_state.user_name.strip():
-    st.title("🌟 わくわく理科探検チャットへようこそ！")
-    st.markdown("""
-    ここでは、AIの「探検ハカセ」と一緒に理科を楽しく学べるよ！
-    
-    ### 🛠️ できること
-    - **💬 チャット**: 日替わりの実験や問題に挑戦！ハカセになんでも質問しよう。
-    - **🎯 クイズ道場**: 4択クイズで知識を試そう。連続正解を目指してね！
-    - **📊 学習記録レポート**: がんばった記録がグラフや数字で見られるよ。
-    
-    **👆 まずは、上の入力欄にあなたの名前（ニックネーム）を入れてね！**
-    """)
-    st.stop() # 名前がないとこれより下（チャットやクイズ）は実行されない
-
-# ----------------------------------------------------
-# ⚠️ 新規ユーザーの場合は、チュートリアルを出してストップ
-# ----------------------------------------------------
-if st.session_state.show_tutorial:
-    st.info(f"🎉 初めまして、{st.session_state.user_name}さん！探検ハカセの研究所へようこそ！")
-    st.markdown("""
-    ### 🎓 アプリの使い方
-    1. **サイドバーの設定**: 左のメニューから「学年」と「ハカセの性格」を選んでね。
-    2. **APIキー**: 左下の設定からAPIキーを入れると、ハカセが動き出すよ！
-    3. **チャットで話す**: 毎日の実験やクイズの答えをチャットで教えたり、わからないことを聞いてみよう。
-    4. **クイズ道場**: メニューから「クイズ道場」に切り替えて、問題にチャレンジ！
-    """)
-    if st.button("👍 わかった！はじめる！", use_container_width=True):
-        st.session_state.show_tutorial = False
-        st.rerun()
-    st.stop() # わかったボタンを押すまでメイン画面を出さない
-
-# ==========================================
-# 6. メイン画面の切り替え
+# 7. メイン画面の切り替え
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
