@@ -5,7 +5,7 @@ import os
 import time
 import uuid
 import json
-import random  # ランダム機能を追加
+import random
 
 import openai
 import pandas as pd
@@ -48,25 +48,24 @@ DEFAULT_CONTENT = {
 }
 
 # ==========================================
-# 2. 関数定義
+# 2. 関数定義（MEXTガイドライン対応）
 # ==========================================
 
-def get_grade_category(grade_name):
-    if "小学" in grade_name:
-        if any(g in grade_name for g in ["1年生", "2年生", "3年生"]): return "小学低学年"
-        else: return "小学高学年"
-    elif "中学" in grade_name:
-        return "中学生"
-    elif "高校" in grade_name:
-        return "高校生"
-    else:
-        return "一般大人"
+def clean_grade_name(grade_name):
+    # 絵文字を取り除いて「小学3年生」などの純粋な学年文字列を取得
+    return grade_name.replace("👦", "").replace("🧑", "").replace("🏫", "").replace("🎓", "").strip()
 
 def generate_daily_content(api_key, grade_name, model_name, seed_date):
-    grade_cat = get_grade_category(grade_name)
-    random_seed = random.randint(1, 10000) # 毎日違う内容を引き出すためのランダムな数字
-    system_prompt = f"""あなたは理科の専門家です。対象読者（{grade_cat}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}、シード値: {random_seed}）
-※毎日同じ内容にならないよう、マイナーなトピックや意外な事実を盛り込んでください。
+    exact_grade = clean_grade_name(grade_name)
+    random_seed = random.randint(1, 10000)
+    
+    system_prompt = f"""あなたは日本の学校教育に精通した理科・生活・算数の専門教師です。対象読者（{exact_grade}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}、シード値: {random_seed}）
+
+【厳守するルール（文部科学省ガイドライン準拠）】
+1. 内容のレベル: {exact_grade}の学習指導要領（理科・生活・算数など）の範囲に適した内容にすること。
+2. 使用漢字: 「学年別漢字配当表」に基づき、{exact_grade}までに習う漢字のみを使用すること。未習漢字は必ずひらがなを使用するか、ルビを振ること。
+3. 毎日同じ内容にならないよう、マイナーなトピックや意外な事実を盛り込むこと。
+
 以下のJSONフォーマットで出力してください。
 {{
   "experiment": {{
@@ -75,8 +74,8 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
   }},
   "problem": {{
     "title": "🧪 今日の挑戦問題",
-    "question": "問題文（計算問題など）",
-    "hint": "解くためのヒントや公式（答えは書かない！）"
+    "question": "問題文（計算問題や考察問題など）",
+    "hint": "解くためのヒント（答えは書かない！）"
   }},
   "trivia": {{
     "物理": "物理の豆知識（50文字程度）", "化学": "化学の豆知識", "生物": "生物の豆知識", "地学・宇宙": "地学・宇宙の豆知識"
@@ -90,24 +89,25 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
         return None
 
 def generate_quiz(api_key, grade_name, model_name):
-    grade_cat = get_grade_category(grade_name)
+    exact_grade = clean_grade_name(grade_name)
     topics = ["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康", "科学の歴史", "深海・海"]
     random_topic = random.choice(topics)
     random_seed = random.randint(1, 10000)
     
-    system_prompt = f"""あなたは理科の専門家です。{grade_cat}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
-今回は特に「{random_topic}」に関する、他の問題と被らないユニークな問題を作成してください。（シード値: {random_seed}）
+    system_prompt = f"""あなたは日本の学校教育に精通した専門教師です。{exact_grade}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
+今回は「{random_topic}」に関する、ユニークな問題を作成してください。（シード値: {random_seed}）
 
-【厳守するルール】
-- 問題は学年に適した内容であり、学術的に正確であること。
-- 選択肢の中に正解は必ず1つだけ存在し、他の3つは明確に誤りであること。
-- 引っ掛け問題や言葉遊びなど、曖昧な表現は避けること。
+【厳守するルール（文部科学省ガイドライン準拠）】
+1. 問題内容: {exact_grade}の学習指導要領の範囲を逸脱せず、学術的に正確であること。
+2. 使用漢字: 「学年別漢字配当表」に基づき、{exact_grade}までに習う漢字のみを使用すること。未習漢字はひらがなにするかルビを振ること。
+3. 選択肢の中に正解は必ず1つだけ存在し、他の3つは明確に誤りであること。引っ掛け問題は避けること。
+4. 解説は、児童生徒が「なぜそうなるのか」を論理的に理解できるような内容にすること。
 
 {{
   "question": "問題文",
   "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
   "correct_index": 正解の選択肢のインデックス（0〜3の整数）,
-  "explanation": "なぜそれが正解なのかの論理的な解説（対象読者に合わせた口調で分かりやすく）"
+  "explanation": "なぜそれが正解なのかの論理的な解説"
 }}"""
     try:
         client = openai.OpenAI(api_key=api_key)
@@ -115,6 +115,32 @@ def generate_quiz(api_key, grade_name, model_name):
         return json.loads(res.choices[0].message.content)
     except Exception:
         return None
+
+def get_system_prompt(grade_name, persona_name):
+    exact_grade = clean_grade_name(grade_name)
+    
+    persona_instruction = ""
+    if "優しい" in persona_name:
+        persona_instruction = "「〜だね」「〜だよ」と温かく語りかけ、ユーザーをたくさん褒めて自己肯定感を高めてください。"
+    elif "癖あり" in persona_name:
+        persona_instruction = "「フハハ！」「〜なのだ！」と少しオーバーで芝居がかったマッドサイエンティスト風の口調で話してください。"
+    elif "熱血" in persona_name:
+        persona_instruction = "「〜だぜ！」「燃えてきたー！」など、体育会系でハイテンションに励ましてください。"
+    else:
+        persona_instruction = "親しみやすく丁寧な口調で話してください。"
+
+    mext_rules = f"""
+【文部科学省ガイドラインの厳守】
+1. 学習指導要領への準拠: {exact_grade}の理科・算数・生活科などの学習指導要領の範囲内で解説・指導してください。
+2. 使用漢字の制限: 「学年別漢字配当表」に従い、{exact_grade}までに習う漢字のみを使用してください。未習漢字には必ず「ひらがな」を使うか、Markdownのルビを振ってください。
+3. 思考力の育成: 単に答えを教えるのではなく、児童生徒が自ら問題解決できるような問いかけやヒントを出してください。
+"""
+
+    base_role = f"あなたは自然科学の学習を支援するパートナー「探検ハカセ」です。\n【キャラクター】{persona_instruction}\n{mext_rules}\n【重要】ユーザーが実験結果や答えを送ってきたら、大げさに褒めてから解説してください。"
+    qa_instruction = "\n【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。"
+
+    return f"{base_role}\n【対象】: {exact_grade}\n{qa_instruction}"
+
 
 def load_json(file_path):
     if os.path.exists(file_path):
@@ -175,24 +201,6 @@ def load_user_data(user_name):
         return df[df["user_name"] == (user_name.strip() if user_name.strip() else "探検者")]
     except Exception: return pd.DataFrame()
 
-def get_system_prompt(grade_name, persona_name):
-    persona_instruction = ""
-    if "優しい" in persona_name:
-        persona_instruction = "【キャラクター】あなたは優しくて包容力のある探検ハカセです。「〜だね」「〜だよ」と温かく語りかけ、ユーザーをたくさん褒めて自己肯定感を高めてください。"
-    elif "癖あり" in persona_name:
-        persona_instruction = "【キャラクター】あなたは少し変わったマッドサイエンティスト風の探検ハカセです。「フハハ！」「〜なのだ！」「〜であるぞ！」と少しオーバーで芝居がかった口調で話してください。"
-    elif "熱血" in persona_name:
-        persona_instruction = "【キャラクター】あなたは熱血漢の探検ハカセです。「〜だぜ！」「燃えてきたー！」など、体育会系でハイテンションに励ましてください。"
-    else:
-        persona_instruction = "【キャラクター】あなたは知的で穏やかな探検ハカセです。親しみやすく丁寧な口調で話してください。"
-
-    base_role = f"あなたは自然科学の学習を支援するパートナー「探検ハカセ」です。\n{persona_instruction}\n【重要】ユーザーが「今日の実験」の結果や問題の答えを送ってきたら、大げさに褒めてから正解と理由を解説してください。"
-    qa_instruction = "\n【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。"
-
-    if "小学" in grade_name: return f"{base_role}\n【対象】: {grade_name}\n・習っていない漢字はひらがなにするかルビを使用\n・返信は100〜150文字程度\n{qa_instruction}"
-    elif "中学" in grade_name: return f"{base_role}\n【対象】: {grade_name}\n・化学式や物理公式を活用して理論的に解説\n{qa_instruction}"
-    else: return f"{base_role}\n【対象】: {grade_name}\n・専門用語を用いた深掘り解説\n{qa_instruction}"
-
 def encode_image(image_bytes):
     img = Image.open(io.BytesIO(image_bytes))
     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
@@ -223,7 +231,7 @@ def create_new_thread(system_prompt, grade_name):
     thread_count = len(st.session_state.get("threads", {})) + 1
     is_child = "小学" in grade_name
     default_title = f"あたらしい おはなし {thread_count}" if is_child else f"新しいテーマ {thread_count}"
-    greeting = f"こんにちは！【{grade_name}】向けの 探検スタートだよ！\n今日の実験の結果や、問題の答えもここで教えてね！" if is_child else f"こんにちは！【{grade_name}】モードで解説します。\n今日の実験結果や計算問題の答えも、ここで教えてくださいね！"
+    greeting = f"こんにちは！【{clean_grade_name(grade_name)}】向けの 探検スタートだよ！\n今日の実験の結果や、問題の答えもここで教えてね！" if is_child else f"こんにちは！【{clean_grade_name(grade_name)}】モードで解説します。\n今日の実験結果や計算問題の答えも、ここで教えてくださいね！"
     return new_id, {"title": default_title, "messages": [{"role": "system", "content": system_prompt}, {"role": "assistant", "content": greeting}]}
 
 st.markdown("""
