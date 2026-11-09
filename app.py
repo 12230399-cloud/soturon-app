@@ -61,7 +61,6 @@ def get_grade_category(grade_name):
     else:
         return "一般大人"
 
-# --- 毎日のコンテンツ (実験・問題・豆知識) ---
 def generate_daily_content(api_key, grade_name, model_name, seed_date):
     grade_cat = get_grade_category(grade_name)
     system_prompt = f"""あなたは理科の専門家です。対象読者（{grade_cat}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}）
@@ -87,7 +86,6 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
     except Exception:
         return None
 
-# --- クイズ出題 (AI) ---
 def generate_quiz(api_key, grade_name, model_name):
     grade_cat = get_grade_category(grade_name)
     system_prompt = f"""あなたは理科の専門家です。{grade_cat}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
@@ -110,7 +108,6 @@ def generate_quiz(api_key, grade_name, model_name):
     except Exception:
         return None
 
-# --- 各種データ管理 (記録) ---
 def load_json(file_path):
     if os.path.exists(file_path):
         with open(file_path, "r", encoding="utf-8") as f: return json.load(f)
@@ -170,7 +167,6 @@ def load_user_data(user_name):
         return df[df["user_name"] == (user_name.strip() if user_name.strip() else "探検者")]
     except Exception: return pd.DataFrame()
 
-# --- プロンプト・性格設定 ---
 def get_system_prompt(grade_name, persona_name):
     persona_instruction = ""
     if "優しい" in persona_name:
@@ -209,11 +205,10 @@ if "suggested_questions" not in st.session_state: st.session_state.suggested_que
 if "auto_send_msg" not in st.session_state: st.session_state.auto_send_msg = None
 if "daily_content" not in st.session_state: st.session_state.daily_content = None
 if "content_date_grade" not in st.session_state: st.session_state.content_date_grade = ""
-
-# クイズ用セッション
 if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
 if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
 if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
+if "show_tutorial" not in st.session_state: st.session_state.show_tutorial = False
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -280,13 +275,18 @@ with st.sidebar:
     selected_model = st.selectbox("🧠 AIのモデル", ["gpt-4o", "gpt-4o-mini"], index=0)
 
 # ==========================================
-# 5. ヘッダー共通 (名前入力)
+# 5. ヘッダー共通 (名前入力と新規ユーザー判定)
 # ==========================================
 st.markdown('<div class="user-card">', unsafe_allow_html=True)
 u_col1, u_col2 = st.columns([2, 1])
 with u_col1:
     input_name = st.text_input("👤 あなたの おなまえ", value=st.session_state.user_name, key="global_user_name_input")
     if input_name != st.session_state.user_name:
+        # 新しい名前が入力された場合、過去の記録があるかチェック
+        if input_name.strip():
+            streaks = load_json(STREAK_FILE)
+            if input_name not in streaks:
+                st.session_state.show_tutorial = True
         st.session_state.user_name = input_name
         st.rerun()
 with u_col2:
@@ -294,6 +294,40 @@ with u_col2:
     if st.session_state.user_name.strip():
         st.success(f"🔥 チャット連続記録: {get_streak(st.session_state.user_name)} 日目！")
 st.markdown("</div>", unsafe_allow_html=True)
+
+# ----------------------------------------------------
+# ⚠️ 名前の入力がない場合は、ここでウェルカム画面を出してストップ
+# ----------------------------------------------------
+if not st.session_state.user_name.strip():
+    st.title("🌟 わくわく理科探検チャットへようこそ！")
+    st.markdown("""
+    ここでは、AIの「探検ハカセ」と一緒に理科を楽しく学べるよ！
+    
+    ### 🛠️ できること
+    - **💬 チャット**: 日替わりの実験や問題に挑戦！ハカセになんでも質問しよう。
+    - **🎯 クイズ道場**: 4択クイズで知識を試そう。連続正解を目指してね！
+    - **📊 学習記録レポート**: がんばった記録がグラフや数字で見られるよ。
+    
+    **👆 まずは、上の入力欄にあなたの名前（ニックネーム）を入れてね！**
+    """)
+    st.stop() # 名前がないとこれより下（チャットやクイズ）は実行されない
+
+# ----------------------------------------------------
+# ⚠️ 新規ユーザーの場合は、チュートリアルを出してストップ
+# ----------------------------------------------------
+if st.session_state.show_tutorial:
+    st.info(f"🎉 初めまして、{st.session_state.user_name}さん！探検ハカセの研究所へようこそ！")
+    st.markdown("""
+    ### 🎓 アプリの使い方
+    1. **サイドバーの設定**: 左のメニューから「学年」と「ハカセの性格」を選んでね。
+    2. **APIキー**: 左下の設定からAPIキーを入れると、ハカセが動き出すよ！
+    3. **チャットで話す**: 毎日の実験やクイズの答えをチャットで教えたり、わからないことを聞いてみよう。
+    4. **クイズ道場**: メニューから「クイズ道場」に切り替えて、問題にチャレンジ！
+    """)
+    if st.button("👍 わかった！はじめる！", use_container_width=True):
+        st.session_state.show_tutorial = False
+        st.rerun()
+    st.stop() # わかったボタンを押すまでメイン画面を出さない
 
 # ==========================================
 # 6. メイン画面の切り替え
@@ -323,7 +357,6 @@ if "チャット" in page:
     todays_exp = daily_data.get("experiment", {})
     todays_prob = daily_data.get("problem", {})
     todays_trivias = daily_data.get("trivia", {})
-    exp_cat = get_grade_category(st.session_state.selected_grade)
 
     col_daily1, col_daily2 = st.columns(2)
     with col_daily1:
@@ -379,9 +412,8 @@ if "チャット" in page:
             save_user_stat(st.session_state.user_name, st.session_state.current_thread_id, current_thread["title"], len(user_input), len(user_input) / (elapsed_time / 60) if elapsed_time > 0 else 0, len(set(user_input)), user_input)
 
             if any(word in user_input for word in ["実験", "できた", "結果", "やった", "答え", "わかった"]):
-                if st.session_state.user_name.strip():
-                    update_streak(st.session_state.user_name)
-                    st.toast("🔥 れんぞく記録がのびたよ！", icon="🎉")
+                update_streak(st.session_state.user_name)
+                st.toast("🔥 れんぞく記録がのびたよ！", icon="🎉")
 
             if current_thread["title"].startswith("あたらしい") and len(current_thread["messages"]) <= 2: current_thread["title"] = f"💬 {user_input[:12]}..."
             
@@ -440,7 +472,6 @@ elif "🎯 クイズ道場" in page:
     if not api_key:
         st.warning("👈 クイズを生成するにはAPIキーを入力してね！")
     else:
-        # クイズがまだ作られていない場合
         if st.session_state.quiz_data is None:
             if st.button("✨ 新しいクイズを出題する！", use_container_width=True):
                 with st.spinner("AIがクイズを作っています..."):
@@ -453,7 +484,6 @@ elif "🎯 クイズ道場" in page:
                     else:
                         st.error("クイズの作成に失敗しました。もう一度試してね。")
         else:
-            # クイズ表示中
             q_data = st.session_state.quiz_data
             st.markdown(f'<div class="quiz-card"><h4>Q. {q_data["question"]}</h4></div>', unsafe_allow_html=True)
 
@@ -463,19 +493,15 @@ elif "🎯 クイズ道場" in page:
                         st.session_state.quiz_answered = True
                         st.session_state.quiz_selected = i
                         is_correct = (i == q_data["correct_index"])
-                        if st.session_state.user_name.strip():
-                            update_quiz_stats(st.session_state.user_name, is_correct)
+                        update_quiz_stats(st.session_state.user_name, is_correct)
                         st.rerun()
             else:
                 is_correct = (st.session_state.quiz_selected == q_data["correct_index"])
-                if is_correct:
-                    st.success(f"🎉 大正解！！ あなたの答え: {q_data['choices'][st.session_state.quiz_selected]}")
-                else:
-                    st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
+                if is_correct: st.success(f"🎉 大正解！！ あなたの答え: {q_data['choices'][st.session_state.quiz_selected]}")
+                else: st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
                 
                 st.info(f"💡 【解説】\n{q_data['explanation']}")
 
-                # 次の問題へボタンを押したら「すぐ」AIに次の問題を作らせる
                 if st.button("⏭️ 次の問題へ", use_container_width=True):
                     with st.spinner("AIが次の問題を作っています..."):
                         new_q_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
@@ -491,8 +517,6 @@ elif "🎯 クイズ道場" in page:
 
 else:
     st.title("📊 学習記録レポート")
-    
-    # 1. チャットの記録
     st.subheader("💬 チャットの記録")
     df = load_user_data(st.session_state.user_name)
     if df.empty:
@@ -503,21 +527,17 @@ else:
         col2.metric("総入力文字数", f"{df['char_count'].sum()} 文字")
         col3.metric("平均タイピング速度", f"{round(df['typing_speed'].mean(), 1)} 文字/分")
         
-        # グラフ表示を追加！
         st.markdown("##### 📈 入力文字数の推移")
         df['timestamp_dt'] = pd.to_datetime(df['timestamp'])
         chart_data = df.set_index('timestamp_dt')[['char_count']]
         st.line_chart(chart_data)
 
         st.markdown("##### 📝 最近のやりとり")
-        # 必要な列だけを抽出して見やすく表示
         display_df = df[['timestamp', 'thread_title', 'text', 'char_count']].tail(10).sort_values("timestamp", ascending=False)
         display_df.columns = ['日時', 'テーマ', '入力内容', '文字数']
         st.dataframe(display_df, hide_index=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
-
-    # 2. クイズの記録
     st.subheader("🎯 クイズ道場の記録")
     q_stats = get_quiz_stats(st.session_state.user_name)
     if q_stats['total'] == 0:
