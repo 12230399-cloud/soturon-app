@@ -52,6 +52,7 @@ DEFAULT_CONTENT = {
 # ==========================================
 
 def clean_grade_name(grade_name):
+    # 絵文字を取り除いて「小学3年生」などの純粋な学年文字列を取得
     return grade_name.replace("👦", "").replace("🧑", "").replace("🏫", "").replace("🎓", "").strip()
 
 def generate_daily_content(api_key, grade_name, model_name, seed_date):
@@ -255,7 +256,7 @@ if not st.session_state.user_name.strip():
     
     col1, col2 = st.columns(2)
     with col1:
-        input_name = st.text_input("👤 あなたの おなまえ", key="first_name_input")
+        input_name = st.text_input("👤 あなたの おなまえ（ニックネーム）", key="first_name_input")
     with col2:
         input_grade = st.selectbox("🎓 学年を選んでね", GRADE_OPTIONS, index=2, key="first_grade_input")
         
@@ -338,7 +339,7 @@ with st.sidebar:
     selected_model = st.selectbox("🧠 AIのモデル", ["gpt-4o", "gpt-4o-mini"], index=0)
 
 # ==========================================
-# 7. メイン画面の切り替え（スマホ向けUI改善）
+# 7. メイン画面の切り替え
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
@@ -358,9 +359,12 @@ if "チャット" in page:
                 if new_data:
                     st.session_state.daily_content = new_data
                     st.session_state.content_date_grade = current_state_key
+                    
+                    # 豆知識の順番をシャッフルして記憶
                     keys = list(new_data.get("trivia", {}).keys())
                     random.shuffle(keys)
                     st.session_state.trivia_order = keys
+                    
                     daily_data = new_data
                 else: daily_data = DEFAULT_CONTENT
         else: daily_data = st.session_state.daily_content
@@ -369,29 +373,29 @@ if "チャット" in page:
     todays_prob = daily_data.get("problem", {})
     todays_trivias = daily_data.get("trivia", {})
 
-    # 💡【UI改善】スマホの縦幅を節約するため、折りたたみ機能(Expander)とタブ(Tabs)を使用
-    with st.expander("🎁 今日の探検コンテンツ（タップで開閉）", expanded=True):
-        tab1, tab2, tab3 = st.tabs(["🧪 実験", "✍️ 問題", "💡 豆知識"])
-        
-        with tab1:
-            st.markdown(f'<div class="exp-card"><h5 style="margin-top:0;">{todays_exp.get("title", "")}</h5><span style="font-size: 14px;">{todays_exp.get("desc", "")}</span><div style="margin-top: 5px; font-size: 12px; color: #d32f2f;">※結果がどうなったかハカセに教えてね！</div></div>', unsafe_allow_html=True)
-            
-        with tab2:
-            st.markdown(f'<div class="prob-card"><h5 style="margin-top:0;">{todays_prob.get("title", "")}</h5><b style="font-size: 14px;">Q: {todays_prob.get("question", "")}</b><br><span style="font-size: 13px; color: #6a1b9a;">💡 ヒント: {todays_prob.get("hint", "")}</span></div>', unsafe_allow_html=True)
-            
-        with tab3:
-            trivia_keys = st.session_state.get("trivia_order", list(todays_trivias.keys()))
-            for cat in trivia_keys:
-                trivia_text = todays_trivias.get(cat, "")
-                if not trivia_text: continue
-                # スマホでも見やすいよう、カード風に縦並び配置
-                st.markdown(f"**📚 【{cat}】の豆知識**<br>{trivia_text}", unsafe_allow_html=True)
-                if st.button(f"🗣️ もっと聞く", key=f"trivia_btn_{cat}", use_container_width=True):
+    col_daily1, col_daily2 = st.columns(2)
+    with col_daily1:
+        st.markdown(f'<div class="exp-card"><h5 style="margin-top:0;">⏱️ 本日の実験</h5><b>{todays_exp.get("title", "")}</b><br><span style="font-size: 14px;">{todays_exp.get("desc", "")}</span><div style="margin-top: 5px; font-size: 12px; color: #d32f2f;">※結果がどうなったかハカセに教えてね！</div></div>', unsafe_allow_html=True)
+    with col_daily2:
+        st.markdown(f'<div class="prob-card"><h5 style="margin-top:0;">{todays_prob.get("title", "")}</h5><b style="font-size: 14px;">Q: {todays_prob.get("question", "")}</b><br><span style="font-size: 13px; color: #6a1b9a;">💡 ヒント: {todays_prob.get("hint", "")}</span></div>', unsafe_allow_html=True)
+
+    st.markdown('<h5 style="margin-top:10px;">💡 今日の豆知識</h5>', unsafe_allow_html=True)
+    t_cols = st.columns(2)
+    
+    trivia_keys = st.session_state.get("trivia_order", list(todays_trivias.keys()))
+    
+    for idx, cat in enumerate(trivia_keys):
+        trivia_text = todays_trivias.get(cat, "")
+        if not trivia_text: continue
+        with t_cols[idx % 2]:
+            expander_title = f"📚 豆知識 {idx+1}" if is_child else f"📚 【{cat}】の豆知識"
+            with st.expander(expander_title, expanded=True):
+                st.markdown(f"> {trivia_text}")
+                if st.button("🗣️ 詳しく聞く", key=f"trivia_btn_{cat}"):
                     st.session_state.auto_send_msg = f"「{trivia_text}」についてもっと教えて！"
                     st.rerun()
-                st.divider()
 
-    st.markdown("<hr style='margin: 10px 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
 
     # --- チャット履歴表示 ---
     non_system_msgs = [m for m in current_thread["messages"] if m["role"] != "system"]
