@@ -32,17 +32,60 @@ GRADE_OPTIONS = [
     "🏫 高校生", "🎓 大人・一般",
 ]
 
-EXPERIMENTS = [
-    {"title": "💧 逃げるコショウ", "desc": "お皿に水を張り、コショウをふりかけます。指先に1滴だけ食器用洗剤をつけて水面を触ってみよう！"},
-    {"title": "🎈 くっつく風船", "desc": "ふくらませた風船を髪の毛や服で10秒こすってから、壁や天井にくっつけてみよう！"},
-    {"title": "🥚 浮く卵", "desc": "コップに水を入れて卵を沈めます。そこに塩を大さじずつ溶かしていくと、卵はどうなる？"},
-    {"title": "🌈 水の虹", "desc": "ティッシュに水性ペンで点を並べて描き、下の端を少しだけ水につけておくとどうなる？"},
-    {"title": "🧊 氷の糸釣り", "desc": "水に浮かべた氷の上にタコ糸を置き、その上から塩をひとつまみかけます。1分後に糸を持ち上げると？"},
-]
+# --- 学年別 おうち実験データベース（1日5分） ---
+EXPERIMENTS = {
+    "小学低学年": [
+        {"title": "💧 逃げるコショウ", "desc": "お皿に水を張り、コショウをふりかけます。指先に1滴だけ食器用洗剤をつけて水面を触ってみよう！"},
+        {"title": "🎈 くっつく風船", "desc": "ふくらませた風船を髪の毛や服で10秒こすってから、壁や天井にくっつけてみよう！"},
+        {"title": "🍅 浮く野菜、沈む野菜", "desc": "水を張ったボウルに、ミニトマトやピーマンなどの野菜を入れてみよう。浮くものと沈むものの違いは？"},
+    ],
+    "小学高学年": [
+        {"title": "🥚 浮く卵", "desc": "コップに水を入れて卵を沈めます。そこに塩を大さじずつ溶かしていくと、卵はどうなる？"},
+        {"title": "🌈 水の虹", "desc": "ティッシュに水性ペンで点を並べて描き、下の端を少しだけ水につけておくとどうなる？"},
+        {"title": "🧊 氷の糸釣り", "desc": "水に浮かべた氷の上にタコ糸を置き、その上から塩をひとつまみかけます。1分後に糸を持ち上げると？"},
+    ],
+    "中学生以上": [
+        {"title": "🔋 コイン電池", "desc": "10円玉と1円玉の間に、塩水で濡らしたティッシュを挟んで層を作ります。テスターで電圧を測ってみよう。"},
+        {"title": "❄️ 瞬間氷結（過冷却）", "desc": "未開封の炭酸水を冷凍庫でギリギリ凍らない程度（約3時間半）冷やし、お皿に注いだ氷に当ててみよう。"},
+        {"title": "🧪 紫キャベツ液のpH判定", "desc": "紫キャベツの汁（お湯で煮出したもの）に、レモン汁や重曹、石鹸水を入れて色の変化（酸性・アルカリ性）を観察しよう。"},
+    ]
+}
+
+# --- 分野別 豆知識データベース ---
+TRIVIA = {
+    "🍎 物理": [
+        "光は1秒間に地球を約7回り半（約30万km）も進むことができるんだ！",
+        "音は空気中よりも、水の中のほうが約4倍も速く伝わるんだよ。",
+        "宇宙空間には空気が無いので、どんなに大きな爆発が起きても音は全く聞こえないんだ。"
+    ],
+    "🧪 化学": [
+        "水（H2O）はお湯のときよりも、氷のときのほうが体積が大きくなる、とても珍しい物質なんだ。",
+        "ダイヤモンドと鉛筆の芯（黒鉛）は、見た目は全然違うけれど、どちらも同じ「炭素」という成分からできているよ！",
+        "鉄が錆びるとき、実はほんの少しだけ熱を出しているんだ。（カイロはこの仕組みを利用しているよ）"
+    ],
+    "🌿 生物": [
+        "人間の血管をすべて一本につなぎ合わせると、なんと地球を約2周半（約10万km）もする長さになるんだ！",
+        "タコの心臓は3つ、脳は9つもあるんだよ！",
+        "バナナはDNA（遺伝子の設計図）の約60%が人間と同じなんだって。"
+    ],
+    "🌍 地学・宇宙": [
+        "地球にある水のうち、私たちが飲み水として使える淡水は、全体のたった「0.01%」しかないんだ。",
+        "太陽は地球の約109倍の大きさで、太陽の中に地球が約130万個もスッポリ入ってしまうんだよ！",
+        "雷の温度は、なんと太陽の表面よりも熱い約3万度にもなるんだ。"
+    ]
+}
 
 # ==========================================
 # 2. 関数定義
 # ==========================================
+
+def get_grade_category(grade_name):
+    if any(g in grade_name for g in ["1年生", "2年生", "3年生"]) and "小学" in grade_name:
+        return "小学低学年"
+    elif any(g in grade_name for g in ["4年生", "5年生", "6年生"]) and "小学" in grade_name:
+        return "小学高学年"
+    else:
+        return "中学生以上"
 
 # --- 連続記録（ストリーク）管理 ---
 def load_streaks():
@@ -132,7 +175,7 @@ if "user_name" not in st.session_state: st.session_state.user_name = ""
 if "selected_grade" not in st.session_state: st.session_state.selected_grade = GRADE_OPTIONS[2]
 if "last_send_time" not in st.session_state: st.session_state.last_send_time = time.time()
 if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
-if "exp_seed" not in st.session_state: st.session_state.exp_seed = int(date.today().strftime("%Y%m%d"))
+if "daily_seed" not in st.session_state: st.session_state.daily_seed = int(date.today().strftime("%Y%m%d"))
 if "suggested_questions" not in st.session_state: st.session_state.suggested_questions = []
 if "auto_send_msg" not in st.session_state: st.session_state.auto_send_msg = None
 
@@ -148,8 +191,9 @@ def create_new_thread(system_prompt, grade_name):
 st.markdown("""
     <style>
     .stApp { background-color: #FFFDE7 !important; color: #212121 !important; }
-    .user-card, .exp-card { background-color: #FFFFFF; border: 2px solid #FFB74D; border-radius: 15px; padding: 12px 18px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    .user-card, .exp-card, .trivia-card { background-color: #FFFFFF; border: 2px solid #FFB74D; border-radius: 15px; padding: 12px 18px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
     .exp-card { border-color: #4CAF50; background-color: #F1F8E9; }
+    .trivia-card { border-color: #64B5F6; background-color: #E3F2FD; }
     .stChatMessage { border-radius: 16px !important; padding: 10px 14px !important; margin-bottom: 10px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -218,14 +262,28 @@ if "チャット" in page:
             st.success(f"🔥 実験れんぞく: {get_streak(st.session_state.user_name)} 日目！")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # 1日5分 おうち実験
-    random.seed(st.session_state.exp_seed)
-    todays_exp = random.choice(EXPERIMENTS)
+    # 日替わり要素の決定 (乱数シードを日付で固定)
+    random.seed(st.session_state.daily_seed)
+    
+    # 1. 学年別 1日5分 おうち実験
+    exp_cat = get_grade_category(st.session_state.selected_grade)
+    todays_exp = random.choice(EXPERIMENTS[exp_cat])
+    
+    # 2. 分野別 豆知識
+    trivia_categories = list(TRIVIA.keys())
+    todays_trivia_cat = random.choice(trivia_categories)
+    todays_trivia = random.choice(TRIVIA[todays_trivia_cat])
+
+    # 実験と豆知識のカード表示
     st.markdown(f"""
         <div class="exp-card">
-            <h4 style="margin-top:0;">⏱️ 1日5分！本日のおうち実験</h4>
+            <h4 style="margin-top:0;">⏱️ 1日5分！本日のおうち実験（{exp_cat}向け）</h4>
             <b>{todays_exp["title"]}</b><br>{todays_exp["desc"]}<br>
             <span style="font-size: 13px; color: #555;">※実験をやったら、下の入力欄に「実験できた！」「結果は〇〇だった！」と報告して連続記録をのばそう！</span>
+        </div>
+        <div class="trivia-card">
+            <h4 style="margin-top:0;">💡 今日の豆知識【{todays_trivia_cat}】</h4>
+            {todays_trivia}
         </div>
     """, unsafe_allow_html=True)
 
@@ -258,7 +316,6 @@ if "チャット" in page:
     if user_input:
         if not api_key: st.error("👈 APIキーを入力してね！")
         else:
-            # === 分析データの計算と保存 ===
             current_time = time.time()
             elapsed_time = current_time - st.session_state.last_send_time
             st.session_state.last_send_time = current_time
@@ -277,7 +334,6 @@ if "チャット" in page:
                 text=user_input
             )
 
-            # === 実験の連続記録判定 ===
             if any(word in user_input for word in ["実験", "できた", "結果", "やった"]):
                 if st.session_state.user_name.strip():
                     update_streak(st.session_state.user_name)
@@ -307,7 +363,6 @@ if "チャット" in page:
                     res = openai.OpenAI(api_key=api_key).chat.completions.create(model=selected_model, messages=api_msgs)
                     reply = res.choices[0].message.content
                     
-                    # 質問候補の抽出処理
                     display_reply = reply
                     suggested_qs = []
                     if "---" in reply:
@@ -327,7 +382,6 @@ if "チャット" in page:
             st.rerun()
 
 else:
-    # レポート画面
     st.title("📊 学習記録レポート")
     df = load_user_data(st.session_state.user_name)
     if df.empty:
