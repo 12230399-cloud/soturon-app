@@ -351,8 +351,16 @@ with st.sidebar:
       index=GRADE_OPTIONS.index(st.session_state.selected_grade),
       help="学年に合わせて使う漢字・計算問題・専門用語の深さが変化します！",
   )
+  
+  # ★ここが修正ポイント！学年を変えたら自動で新しいおはなしを作る★
   if selected_grade != st.session_state.selected_grade:
     st.session_state.selected_grade = selected_grade
+    # 自動的に新しい学年でスレッドを作成
+    new_id, new_thread = create_new_thread(get_system_prompt(selected_grade), selected_grade)
+    if "threads" not in st.session_state:
+        st.session_state.threads = {}
+    st.session_state.threads[new_id] = new_thread
+    st.session_state.current_thread_id = new_id
     st.rerun()
 
   is_child = "小学" in selected_grade
