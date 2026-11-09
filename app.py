@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 import json
+import random  # ランダム機能を追加
 
 import openai
 import pandas as pd
@@ -63,7 +64,9 @@ def get_grade_category(grade_name):
 
 def generate_daily_content(api_key, grade_name, model_name, seed_date):
     grade_cat = get_grade_category(grade_name)
-    system_prompt = f"""あなたは理科の専門家です。対象読者（{grade_cat}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}）
+    random_seed = random.randint(1, 10000) # 毎日違う内容を引き出すためのランダムな数字
+    system_prompt = f"""あなたは理科の専門家です。対象読者（{grade_cat}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}、シード値: {random_seed}）
+※毎日同じ内容にならないよう、マイナーなトピックや意外な事実を盛り込んでください。
 以下のJSONフォーマットで出力してください。
 {{
   "experiment": {{
@@ -81,14 +84,19 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
 }}"""
     try:
         client = openai.OpenAI(api_key=api_key)
-        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.7)
+        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
         return json.loads(res.choices[0].message.content)
     except Exception:
         return None
 
 def generate_quiz(api_key, grade_name, model_name):
     grade_cat = get_grade_category(grade_name)
+    topics = ["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康", "科学の歴史", "深海・海"]
+    random_topic = random.choice(topics)
+    random_seed = random.randint(1, 10000)
+    
     system_prompt = f"""あなたは理科の専門家です。{grade_cat}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
+今回は特に「{random_topic}」に関する、他の問題と被らないユニークな問題を作成してください。（シード値: {random_seed}）
 
 【厳守するルール】
 - 問題は学年に適した内容であり、学術的に正確であること。
@@ -103,7 +111,7 @@ def generate_quiz(api_key, grade_name, model_name):
 }}"""
     try:
         client = openai.OpenAI(api_key=api_key)
-        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.7)
+        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
         return json.loads(res.choices[0].message.content)
     except Exception:
         return None
@@ -208,6 +216,7 @@ if "content_date_grade" not in st.session_state: st.session_state.content_date_g
 if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
 if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
 if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
+if "trivia_order" not in st.session_state: st.session_state.trivia_order = []
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -231,7 +240,6 @@ st.markdown("""
 # ==========================================
 # 4. 初回登録画面（オンボーディング）
 # ==========================================
-# 名前がない場合は、ここでウェルカム画面を出して以降の描画をストップする
 if not st.session_state.user_name.strip():
     st.title("🌟 わくわく理科探検チャットへようこそ！")
     
@@ -255,15 +263,15 @@ if not st.session_state.user_name.strip():
         if input_name.strip():
             st.session_state.user_name = input_name
             st.session_state.selected_grade = input_grade
-            st.rerun() # 登録できたら画面を再読み込みしてメイン画面へ！
+            st.rerun() 
         else:
             st.error("👆 おなまえを入力してね！")
     st.markdown('</div>', unsafe_allow_html=True)
     
-    st.stop() # 名前が登録されるまで、下のサイドバーやメイン画面は表示しない！
+    st.stop() 
 
 # ==========================================
-# 5. メイン画面のヘッダー (登録後の名前・連続記録)
+# 5. メイン画面のヘッダー 
 # ==========================================
 st.markdown('<div class="user-card">', unsafe_allow_html=True)
 u_col1, u_col2 = st.columns([2, 1])
@@ -343,6 +351,12 @@ if "チャット" in page:
                 if new_data:
                     st.session_state.daily_content = new_data
                     st.session_state.content_date_grade = current_state_key
+                    
+                    # 豆知識の順番をシャッフルして記憶
+                    keys = list(new_data.get("trivia", {}).keys())
+                    random.shuffle(keys)
+                    st.session_state.trivia_order = keys
+                    
                     daily_data = new_data
                 else: daily_data = DEFAULT_CONTENT
         else: daily_data = st.session_state.daily_content
@@ -359,7 +373,12 @@ if "チャット" in page:
 
     st.markdown('<h5 style="margin-top:10px;">💡 今日の豆知識</h5>', unsafe_allow_html=True)
     t_cols = st.columns(2)
-    for idx, (cat, trivia_text) in enumerate(todays_trivias.items()):
+    
+    trivia_keys = st.session_state.get("trivia_order", list(todays_trivias.keys()))
+    
+    for idx, cat in enumerate(trivia_keys):
+        trivia_text = todays_trivias.get(cat, "")
+        if not trivia_text: continue
         with t_cols[idx % 2]:
             expander_title = f"📚 豆知識 {idx+1}" if is_child else f"📚 【{cat}】の豆知識"
             with st.expander(expander_title, expanded=True):
