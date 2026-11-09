@@ -29,7 +29,8 @@ GRADE_OPTIONS = [
     "👦 小学1年生", "👦 小学2年生", "👦 小学3年生",
     "👦 小学4年生", "👦 小学5年生", "👦 小学6年生",
     "🧑 中学1年生", "🧑 中学2年生", "🧑 中学3年生",
-    "🏫 高校生", "🎓 大人・一般",
+    "🏫 高校1年生", "🏫 高校2年生", "🏫 高校3年生",
+    "🎓 大人・一般",
 ]
 
 PERSONA_OPTIONS = [
@@ -50,9 +51,15 @@ DEFAULT_CONTENT = {
 # ==========================================
 
 def get_grade_category(grade_name):
-    if any(g in grade_name for g in ["1年生", "2年生", "3年生"]) and "小学" in grade_name: return "小学低学年"
-    elif any(g in grade_name for g in ["4年生", "5年生", "6年生"]) and "小学" in grade_name: return "小学高学年"
-    else: return "中学生以上"
+    if "小学" in grade_name:
+        if any(g in grade_name for g in ["1年生", "2年生", "3年生"]): return "小学低学年"
+        else: return "小学高学年"
+    elif "中学" in grade_name:
+        return "中学生"
+    elif "高校" in grade_name:
+        return "高校生"
+    else:
+        return "一般大人"
 
 # --- 毎日のコンテンツ (実験・問題・豆知識) ---
 def generate_daily_content(api_key, grade_name, model_name, seed_date):
@@ -84,11 +91,17 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
 def generate_quiz(api_key, grade_name, model_name):
     grade_cat = get_grade_category(grade_name)
     system_prompt = f"""あなたは理科の専門家です。{grade_cat}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
+
+【厳守するルール】
+- 問題は学年に適した内容であり、学術的に正確であること。
+- 選択肢の中に正解は必ず1つだけ存在し、他の3つは明確に誤りであること。
+- 引っ掛け問題や言葉遊びなど、曖昧な表現は避けること。
+
 {{
   "question": "問題文",
   "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
   "correct_index": 正解の選択肢のインデックス（0〜3の整数）,
-  "explanation": "なぜそれが正解なのかの解説（対象読者に合わせた口調で分かりやすく）"
+  "explanation": "なぜそれが正解なのかの論理的な解説（対象読者に合わせた口調で分かりやすく）"
 }}"""
     try:
         client = openai.OpenAI(api_key=api_key)
@@ -229,7 +242,6 @@ with st.sidebar:
     selected_grade = st.selectbox("学年を選んでね", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
     selected_persona = st.selectbox("ハカセの性格", PERSONA_OPTIONS, index=PERSONA_OPTIONS.index(st.session_state.selected_persona))
     
-    # 学年か性格が変わったらプロンプトを更新
     if selected_grade != st.session_state.selected_grade or selected_persona != st.session_state.selected_persona:
         st.session_state.selected_grade = selected_grade
         st.session_state.selected_persona = selected_persona
@@ -428,6 +440,7 @@ elif "🎯 クイズ道場" in page:
     if not api_key:
         st.warning("👈 クイズを生成するにはAPIキーを入力してね！")
     else:
+        # クイズがまだ作られていない場合
         if st.session_state.quiz_data is None:
             if st.button("✨ 新しいクイズを出題する！", use_container_width=True):
                 with st.spinner("AIがクイズを作っています..."):
@@ -440,6 +453,7 @@ elif "🎯 クイズ道場" in page:
                     else:
                         st.error("クイズの作成に失敗しました。もう一度試してね。")
         else:
+            # クイズ表示中
             q_data = st.session_state.quiz_data
             st.markdown(f'<div class="quiz-card"><h4>Q. {q_data["question"]}</h4></div>', unsafe_allow_html=True)
 
@@ -461,9 +475,19 @@ elif "🎯 クイズ道場" in page:
                 
                 st.info(f"💡 【解説】\n{q_data['explanation']}")
 
+                # 次の問題へボタンを押したら「すぐ」AIに次の問題を作らせる
                 if st.button("⏭️ 次の問題へ", use_container_width=True):
-                    st.session_state.quiz_data = None
-                    st.rerun()
+                    with st.spinner("AIが次の問題を作っています..."):
+                        new_q_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
+                        if new_q_data:
+                            st.session_state.quiz_data = new_q_data
+                            st.session_state.quiz_answered = False
+                            st.session_state.quiz_selected = None
+                            st.rerun()
+                        else:
+                            st.error("クイズの作成に失敗しました。")
+                            st.session_state.quiz_data = None
+                            st.rerun()
 
 else:
     st.title("📊 学習記録レポート")
@@ -478,7 +502,18 @@ else:
         col1.metric("総メッセージ数", f"{len(df)} 回")
         col2.metric("総入力文字数", f"{df['char_count'].sum()} 文字")
         col3.metric("平均タイピング速度", f"{round(df['typing_speed'].mean(), 1)} 文字/分")
-        st.dataframe(df.tail(20).sort_values("timestamp", ascending=False))
+        
+        # グラフ表示を追加！
+        st.markdown("##### 📈 入力文字数の推移")
+        df['timestamp_dt'] = pd.to_datetime(df['timestamp'])
+        chart_data = df.set_index('timestamp_dt')[['char_count']]
+        st.line_chart(chart_data)
+
+        st.markdown("##### 📝 最近のやりとり")
+        # 必要な列だけを抽出して見やすく表示
+        display_df = df[['timestamp', 'thread_title', 'text', 'char_count']].tail(10).sort_values("timestamp", ascending=False)
+        display_df.columns = ['日時', 'テーマ', '入力内容', '文字数']
+        st.dataframe(display_df, hide_index=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
