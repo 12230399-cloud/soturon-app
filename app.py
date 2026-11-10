@@ -51,8 +51,6 @@ DEFAULT_CONTENT = {
 # ==========================================
 # 2. 関数定義（ログ保存・MEXTガイドライン対応）
 # ==========================================
-
-# --- 📝 新しいログ保存関数 ---
 def save_chat_log(user_name, thread_title, user_message, ai_response, char_count, typing_speed):
     file_exists = os.path.isfile(STATS_FILE)
     with open(STATS_FILE, "a", newline="", encoding="utf-8-sig") as f:
@@ -139,12 +137,22 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
 def generate_quiz(api_key, grade_name, model_name):
     exact_grade = clean_grade_name(grade_name)
     random_topic = random.choice(["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康"])
-    system_prompt = f"""あなたは専門教師です。{exact_grade}向けの理科4択クイズ（テーマ: {random_topic}）をJSONで出力してください。
-{{ "question": "問題文", "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"], "correct_index": 正解のインデックス(0-3), "explanation": "解説" }}"""
+    system_prompt = f"""あなたは専門教師です。{exact_grade}向けの理科4択クイズ（テーマ: {random_topic}）をJSONで出力してください。必ず以下の構成の「単一のJSONオブジェクト」にしてください（"quiz"などのキーで囲まないこと）。
+{{ "question": "問題文", "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"], "correct_index": 0, "explanation": "解説" }}"""
     try:
         client = openai.OpenAI(api_key=api_key)
         res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
-        return json.loads(res.choices[0].message.content)
+        data = json.loads(res.choices[0].message.content)
+        
+        # AIが "quiz" という余分な箱に入れてしまった場合の救済処理
+        if "quiz" in data and isinstance(data["quiz"], dict):
+            data = data["quiz"]
+            
+        # 必要なデータ（問題文や選択肢）がちゃんと揃っているか確認
+        if "question" not in data or "choices" not in data or "correct_index" not in data:
+            return None 
+            
+        return data
     except Exception: return None
 
 def get_system_prompt(grade_name, persona_name):
@@ -162,14 +170,6 @@ def get_system_prompt(grade_name, persona_name):
 2. 答えをすぐに教えず、自ら考えさせる問いかけを行うこと。
 【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。"""
 
-def encode_image(image_bytes):
-    img = Image.open(io.BytesIO(image_bytes))
-    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-    img.thumbnail((1200, 1200))
-    buffered = io.BytesIO()
-    img.save(buffered, format="JPEG", quality=90)
-    return base64.b64encode(buffered.getvalue()).decode("utf-8")
-
 # ==========================================
 # 3. セッション管理とスタイル
 # ==========================================
@@ -177,7 +177,6 @@ if "user_name" not in st.session_state: st.session_state.user_name = ""
 if "selected_grade" not in st.session_state: st.session_state.selected_grade = GRADE_OPTIONS[2]
 if "selected_persona" not in st.session_state: st.session_state.selected_persona = PERSONA_OPTIONS[0]
 if "last_send_time" not in st.session_state: st.session_state.last_send_time = time.time()
-if "uploader_key" not in st.session_state: st.session_state.uploader_key = 0
 if "suggested_questions" not in st.session_state: st.session_state.suggested_questions = []
 if "auto_send_msg" not in st.session_state: st.session_state.auto_send_msg = None
 if "daily_content" not in st.session_state: st.session_state.daily_content = None
@@ -185,7 +184,6 @@ if "content_date_grade" not in st.session_state: st.session_state.content_date_g
 if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
 if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
 if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
-if "trivia_order" not in st.session_state: st.session_state.trivia_order = []
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -286,10 +284,9 @@ with st.sidebar:
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
-    
-    # 日替わりコンテンツ（折りたたみ）
     today_str = date.today().isoformat()
     current_state_key = f"{today_str}_{st.session_state.selected_grade}_{selected_model}"
+    
     if not api_key: daily_data = DEFAULT_CONTENT
     else:
         if st.session_state.content_date_grade != current_state_key or st.session_state.daily_content is None:
@@ -315,7 +312,6 @@ if "チャット" in page:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # チャット履歴表示
     for msg in [m for m in current_thread["messages"] if m["role"] != "system"]:
         with st.chat_message(msg["role"], avatar="🎓" if msg["role"] == "assistant" else "👦"):
             if "image" in msg and msg["image"]: st.image(msg["image"])
@@ -329,7 +325,6 @@ if "チャット" in page:
                 st.session_state.auto_send_msg = q
                 st.rerun()
 
-    # チャット入力とログ保存
     user_input = st.chat_input("ここに メッセージを かこう！")
     if st.session_state.auto_send_msg:
         user_input = st.session_state.auto_send_msg
@@ -361,7 +356,6 @@ if "チャット" in page:
                     res = openai.OpenAI(api_key=api_key).chat.completions.create(model=selected_model, messages=api_msgs)
                     reply = res.choices[0].message.content
                     
-                    # --- 📝 ここでチャット内容をCSVに保存！ ---
                     save_chat_log(st.session_state.user_name, current_thread["title"], user_input, reply, len(user_input), typing_speed)
 
                     display_reply = reply.split("---")[0].strip() if "---" in reply else reply
@@ -373,7 +367,6 @@ if "チャット" in page:
                 qs_text = reply.split("---")[1].strip()
                 st.session_state.suggested_questions = [line.strip().lstrip('1234567890.-* []') for line in qs_text.split('\n') if line.strip() and (line.strip()[0].isdigit() or line.startswith('-') or line.startswith('*'))]
             else: st.session_state.suggested_questions = []
-            
             st.rerun()
 
 elif "🎯 クイズ道場" in page:
@@ -391,9 +384,13 @@ elif "🎯 クイズ道場" in page:
         if st.session_state.quiz_data is None:
             if st.button("✨ 新しいクイズを出題する！"):
                 with st.spinner("クイズ作成中..."):
-                    st.session_state.quiz_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
-                    st.session_state.quiz_answered = False
-                    st.rerun()
+                    new_quiz = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
+                    if new_quiz is None:
+                        st.error("⚠️ AIがクイズの作成に失敗しました。もう一度「新しいクイズを出題する」ボタンを押してください！")
+                    else:
+                        st.session_state.quiz_data = new_quiz
+                        st.session_state.quiz_answered = False
+                        st.rerun()
         else:
             q_data = st.session_state.quiz_data
             st.markdown(f'<div class="quiz-card"><h4>Q. {q_data["question"]}</h4></div>', unsafe_allow_html=True)
@@ -403,7 +400,6 @@ elif "🎯 クイズ道場" in page:
                     if st.button(f"{i+1}. {choice}", use_container_width=True):
                         st.session_state.quiz_answered = True
                         is_correct = (i == q_data["correct_index"])
-                        # --- 📝 ここでクイズ成績をJSONに保存！ ---
                         update_quiz_stats(st.session_state.user_name, is_correct)
                         st.session_state.quiz_selected = i
                         st.rerun()
