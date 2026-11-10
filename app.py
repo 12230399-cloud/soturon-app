@@ -6,6 +6,7 @@ import time
 import uuid
 import json
 import random
+import csv
 
 import openai
 import pandas as pd
@@ -48,99 +49,20 @@ DEFAULT_CONTENT = {
 }
 
 # ==========================================
-# 2. 関数定義（MEXTガイドライン対応）
+# 2. 関数定義（ログ保存・MEXTガイドライン対応）
 # ==========================================
 
-def clean_grade_name(grade_name):
-    # 絵文字を取り除いて「小学3年生」などの純粋な学年文字列を取得
-    return grade_name.replace("👦", "").replace("🧑", "").replace("🏫", "").replace("🎓", "").strip()
-
-def generate_daily_content(api_key, grade_name, model_name, seed_date):
-    exact_grade = clean_grade_name(grade_name)
-    random_seed = random.randint(1, 10000)
-    
-    system_prompt = f"""あなたは日本の学校教育に精通した理科・生活・算数の専門教師です。対象読者（{exact_grade}）に合わせて、以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}、シード値: {random_seed}）
-
-【厳守するルール（文部科学省ガイドライン準拠）】
-1. 内容のレベル: {exact_grade}の学習指導要領（理科・生活・算数など）の範囲に適した内容にすること。
-2. 使用漢字: 「学年別漢字配当表」に基づき、{exact_grade}までに習う漢字のみを使用すること。未習漢字は必ずひらがなを使用するか、ルビを振ること。
-3. 毎日同じ内容にならないよう、マイナーなトピックや意外な事実を盛り込むこと。
-
-以下のJSONフォーマットで出力してください。
-{{
-  "experiment": {{
-    "title": "実験のタイトル（絵文字を含む）",
-    "desc": "実験の簡単な手順（50文字程度）。※結果はどうなるか絶対に書かないこと！"
-  }},
-  "problem": {{
-    "title": "🧪 今日の挑戦問題",
-    "question": "問題文（計算問題や考察問題など）",
-    "hint": "解くためのヒント（答えは書かない！）"
-  }},
-  "trivia": {{
-    "物理": "物理の豆知識（50文字程度）", "化学": "化学の豆知識", "生物": "生物の豆知識", "地学・宇宙": "地学・宇宙の豆知識"
-  }}
-}}"""
-    try:
-        client = openai.OpenAI(api_key=api_key)
-        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
-        return json.loads(res.choices[0].message.content)
-    except Exception:
-        return None
-
-def generate_quiz(api_key, grade_name, model_name):
-    exact_grade = clean_grade_name(grade_name)
-    topics = ["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康", "科学の歴史", "深海・海"]
-    random_topic = random.choice(topics)
-    random_seed = random.randint(1, 10000)
-    
-    system_prompt = f"""あなたは日本の学校教育に精通した専門教師です。{exact_grade}向けの理科の4択クイズを1問作成し、以下のJSON形式で出力してください。
-今回は「{random_topic}」に関する、ユニークな問題を作成してください。（シード値: {random_seed}）
-
-【厳守するルール（文部科学省ガイドライン準拠）】
-1. 問題内容: {exact_grade}の学習指導要領の範囲を逸脱せず、学術的に正確であること。
-2. 使用漢字: 「学年別漢字配当表」に基づき、{exact_grade}までに習う漢字のみを使用すること。未習漢字はひらがなにするかルビを振ること。
-3. 選択肢の中に正解は必ず1つだけ存在し、他の3つは明確に誤りであること。引っ掛け問題は避けること。
-4. 解説は、児童生徒が「なぜそうなるのか」を論理的に理解できるような内容にすること。
-
-{{
-  "question": "問題文",
-  "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-  "correct_index": 正解の選択肢のインデックス（0〜3の整数）,
-  "explanation": "なぜそれが正解なのかの論理的な解説"
-}}"""
-    try:
-        client = openai.OpenAI(api_key=api_key)
-        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
-        return json.loads(res.choices[0].message.content)
-    except Exception:
-        return None
-
-def get_system_prompt(grade_name, persona_name):
-    exact_grade = clean_grade_name(grade_name)
-    
-    persona_instruction = ""
-    if "優しい" in persona_name:
-        persona_instruction = "「〜だね」「〜だよ」と温かく語りかけ、ユーザーをたくさん褒めて自己肯定感を高めてください。"
-    elif "癖あり" in persona_name:
-        persona_instruction = "「フハハ！」「〜なのだ！」と少しオーバーで芝居がかったマッドサイエンティスト風の口調で話してください。"
-    elif "熱血" in persona_name:
-        persona_instruction = "「〜だぜ！」「燃えてきたー！」など、体育会系でハイテンションに励ましてください。"
-    else:
-        persona_instruction = "親しみやすく丁寧な口調で話してください。"
-
-    mext_rules = f"""
-【文部科学省ガイドラインの厳守】
-1. 学習指導要領への準拠: {exact_grade}の理科・算数・生活科などの学習指導要領の範囲内で解説・指導してください。
-2. 使用漢字の制限: 「学年別漢字配当表」に従い、{exact_grade}までに習う漢字のみを使用してください。未習漢字には必ず「ひらがな」を使うか、Markdownのルビを振ってください。
-3. 思考力の育成: 単に答えを教えるのではなく、児童生徒が自ら問題解決できるような問いかけやヒントを出してください。
-"""
-
-    base_role = f"あなたは自然科学の学習を支援するパートナー「探検ハカセ」です。\n【キャラクター】{persona_instruction}\n{mext_rules}\n【重要】ユーザーが実験結果や答えを送ってきたら、大げさに褒めてから解説してください。"
-    qa_instruction = "\n【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。"
-
-    return f"{base_role}\n【対象】: {exact_grade}\n{qa_instruction}"
-
+# --- 📝 新しいログ保存関数 ---
+def save_chat_log(user_name, thread_title, user_message, ai_response, char_count, typing_speed):
+    file_exists = os.path.isfile(STATS_FILE)
+    with open(STATS_FILE, "a", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["timestamp", "user_name", "thread_title", "user_message", "ai_response", "char_count", "typing_speed"])
+        
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        saved_name = user_name.strip() if user_name.strip() else "ゲストユーザー"
+        writer.writerow([timestamp, saved_name, thread_title, user_message, ai_response, char_count, round(typing_speed, 1)])
 
 def load_json(file_path):
     if os.path.exists(file_path):
@@ -153,53 +75,92 @@ def save_json(file_path, data):
 def update_streak(user_name):
     data = load_json(STREAK_FILE)
     today_str = date.today().isoformat()
-    if user_name not in data: data[user_name] = {"streak": 1, "last_date": today_str}
+    saved_name = user_name.strip() if user_name.strip() else "ゲストユーザー"
+    
+    if saved_name not in data: data[saved_name] = {"streak": 1, "last_date": today_str}
     else:
-        last_date_str = data[user_name]["last_date"]
+        last_date_str = data[saved_name]["last_date"]
         if last_date_str != today_str:
             last_date = date.fromisoformat(last_date_str)
-            if (date.today() - last_date).days == 1: data[user_name]["streak"] += 1
-            else: data[user_name]["streak"] = 1
-            data[user_name]["last_date"] = today_str
+            if (date.today() - last_date).days == 1: data[saved_name]["streak"] += 1
+            else: data[saved_name]["streak"] = 1
+            data[saved_name]["last_date"] = today_str
     save_json(STREAK_FILE, data)
-    return data[user_name]["streak"]
+    return data[saved_name]["streak"]
 
 def get_streak(user_name):
     data = load_json(STREAK_FILE)
-    if user_name in data:
-        last_date = date.fromisoformat(data[user_name]["last_date"])
-        if (date.today() - last_date).days <= 1: return data[user_name]["streak"]
+    saved_name = user_name.strip() if user_name.strip() else "ゲストユーザー"
+    if saved_name in data:
+        last_date = date.fromisoformat(data[saved_name]["last_date"])
+        if (date.today() - last_date).days <= 1: return data[saved_name]["streak"]
     return 0
 
 def update_quiz_stats(user_name, is_correct):
     data = load_json(QUIZ_STATS_FILE)
-    if user_name not in data: data[user_name] = {"total": 0, "correct": 0, "streak": 0}
+    saved_name = user_name.strip() if user_name.strip() else "ゲストユーザー"
     
-    data[user_name]["total"] += 1
+    if saved_name not in data: data[saved_name] = {"total": 0, "correct": 0, "streak": 0}
+    
+    data[saved_name]["total"] += 1
     if is_correct:
-        data[user_name]["correct"] += 1
-        data[user_name]["streak"] += 1
+        data[saved_name]["correct"] += 1
+        data[saved_name]["streak"] += 1
     else:
-        data[user_name]["streak"] = 0
+        data[saved_name]["streak"] = 0
     save_json(QUIZ_STATS_FILE, data)
 
 def get_quiz_stats(user_name):
     data = load_json(QUIZ_STATS_FILE)
-    return data.get(user_name, {"total": 0, "correct": 0, "streak": 0})
+    saved_name = user_name.strip() if user_name.strip() else "ゲストユーザー"
+    return data.get(saved_name, {"total": 0, "correct": 0, "streak": 0})
 
-def save_user_stat(user_name, thread_id, thread_title, char_count, typing_speed, unique_words, text, role="user"):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    saved_name = user_name.strip() if user_name.strip() else "探検者"
-    new_data = pd.DataFrame([{"timestamp": now, "user_name": saved_name, "thread_id": thread_id, "thread_title": thread_title, "role": role, "char_count": char_count, "typing_speed": round(typing_speed, 1), "unique_words": unique_words, "text": text}])
-    if os.path.exists(STATS_FILE): new_data.to_csv(STATS_FILE, mode="a", index=False, header=False, encoding="utf-8-sig")
-    else: new_data.to_csv(STATS_FILE, mode="w", index=False, header=True, encoding="utf-8-sig")
+def clean_grade_name(grade_name):
+    return grade_name.replace("👦", "").replace("🧑", "").replace("🏫", "").replace("🎓", "").strip()
 
-def load_user_data(user_name):
-    if not os.path.exists(STATS_FILE): return pd.DataFrame()
+def generate_daily_content(api_key, grade_name, model_name, seed_date):
+    exact_grade = clean_grade_name(grade_name)
+    random_seed = random.randint(1, 10000)
+    system_prompt = f"""あなたは日本の学校教育に精通した専門教師です。対象読者（{exact_grade}）に合わせて以下の3つのコンテンツをJSON形式で生成してください。（今日の日付: {seed_date}、シード値: {random_seed}）
+【厳守するルール】
+1. {exact_grade}の学習指導要領の範囲に適した内容にすること。
+2. 「学年別漢字配当表」に基づき、{exact_grade}までに習う漢字のみを使用すること。
+{{
+  "experiment": {{ "title": "実験タイトル", "desc": "簡単な手順（結果は書かない）" }},
+  "problem": {{ "title": "今日の挑戦問題", "question": "問題文", "hint": "ヒント" }},
+  "trivia": {{ "物理": "豆知識", "化学": "豆知識", "生物": "豆知識", "地学・宇宙": "豆知識" }}
+}}"""
     try:
-        df = pd.read_csv(STATS_FILE)
-        return df[df["user_name"] == (user_name.strip() if user_name.strip() else "探検者")]
-    except Exception: return pd.DataFrame()
+        client = openai.OpenAI(api_key=api_key)
+        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
+        return json.loads(res.choices[0].message.content)
+    except Exception: return None
+
+def generate_quiz(api_key, grade_name, model_name):
+    exact_grade = clean_grade_name(grade_name)
+    random_topic = random.choice(["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康"])
+    system_prompt = f"""あなたは専門教師です。{exact_grade}向けの理科4択クイズ（テーマ: {random_topic}）をJSONで出力してください。
+{{ "question": "問題文", "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"], "correct_index": 正解のインデックス(0-3), "explanation": "解説" }}"""
+    try:
+        client = openai.OpenAI(api_key=api_key)
+        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
+        return json.loads(res.choices[0].message.content)
+    except Exception: return None
+
+def get_system_prompt(grade_name, persona_name):
+    exact_grade = clean_grade_name(grade_name)
+    persona_instruction = "親しみやすく丁寧な口調で話してください。"
+    if "優しい" in persona_name: persona_instruction = "「〜だね」「〜だよ」と温かく語りかけ、たくさん褒めてください。"
+    elif "癖あり" in persona_name: persona_instruction = "「フハハ！」「〜なのだ！」とマッドサイエンティスト風に。"
+    elif "熱血" in persona_name: persona_instruction = "「〜だぜ！」「燃えてきたー！」と体育会系で。"
+
+    return f"""あなたは自然科学の学習を支援する「探検ハカセ」です。
+【キャラクター】{persona_instruction}
+【対象】{exact_grade}
+【厳守ルール】
+1. {exact_grade}の学習指導要領の範囲内で解説すること。未習漢字はひらがなかルビを使用。
+2. 答えをすぐに教えず、自ら考えさせる問いかけを行うこと。
+【重要】回答の最後には必ず『---』で区切り、ユーザーが次に興味を持ちそうな「深掘り質問の候補」を3つ、箇条書きで提示してください。"""
 
 def encode_image(image_bytes):
     img = Image.open(io.BytesIO(image_bytes))
@@ -229,9 +190,8 @@ if "trivia_order" not in st.session_state: st.session_state.trivia_order = []
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
     thread_count = len(st.session_state.get("threads", {})) + 1
-    is_child = "小学" in grade_name
-    default_title = f"あたらしい おはなし {thread_count}" if is_child else f"新しいテーマ {thread_count}"
-    greeting = f"こんにちは！【{clean_grade_name(grade_name)}】向けの 探検スタートだよ！\n今日の実験の結果や、問題の答えもここで教えてね！" if is_child else f"こんにちは！【{clean_grade_name(grade_name)}】モードで解説します。\n今日の実験結果や計算問題の答えも、ここで教えてくださいね！"
+    default_title = f"テーマ {thread_count}"
+    greeting = f"こんにちは！【{clean_grade_name(grade_name)}】向けの 探検スタートだよ！\n今日の実験の結果や、疑問を教えてね！"
     return new_id, {"title": default_title, "messages": [{"role": "system", "content": system_prompt}, {"role": "assistant", "content": greeting}]}
 
 st.markdown("""
@@ -249,37 +209,24 @@ st.markdown("""
 # 4. 初回登録画面（オンボーディング）
 # ==========================================
 if not st.session_state.user_name.strip():
-    st.title("🌟 わくわく理科探検チャットへようこそ！")
-    
+    st.title("🌟 わくわく理科探検チャット")
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
-    st.info("👋 はじめまして！探検ハカセの研究所へようこそ。まずはあなたのことを教えてね！")
-    
+    st.info("👋 はじめまして！まずはあなたのことを教えてね！")
     col1, col2 = st.columns(2)
-    with col1:
-        input_name = st.text_input("👤 あなたの おなまえ（ニックネーム）", key="first_name_input")
-    with col2:
-        input_grade = st.selectbox("🎓 学年を選んでね", GRADE_OPTIONS, index=2, key="first_grade_input")
+    with col1: input_name = st.text_input("👤 あなたの おなまえ", key="first_name_input")
+    with col2: input_grade = st.selectbox("🎓 学年を選んでね", GRADE_OPTIONS, index=2, key="first_grade_input")
         
-    st.markdown("""
-    ### 🎓 アプリの使い方
-    1. **チャットで話す**: 今日の実験の結果やクイズの答えをチャットで教えたり、わからないことを質問してみよう！
-    2. **クイズ道場**: メニューから「クイズ道場」に切り替えて、4択問題にチャレンジ！
-    3. **設定の変更**: 始めた後でも、左のメニューから学年やハカセの性格はいつでも変えられるよ。
-    """)
-    
-    if st.button("🚀 この設定で探検をはじめる！", type="primary", use_container_width=True):
+    if st.button("🚀 探検をはじめる！", type="primary", use_container_width=True):
         if input_name.strip():
             st.session_state.user_name = input_name
             st.session_state.selected_grade = input_grade
             st.rerun() 
-        else:
-            st.error("👆 おなまえを入力してね！")
+        else: st.error("👆 おなまえを入力してね！")
     st.markdown('</div>', unsafe_allow_html=True)
-    
     st.stop() 
 
 # ==========================================
-# 5. メイン画面のヘッダー 
+# 5. メイン画面ヘッダー & サイドバー
 # ==========================================
 st.markdown('<div class="user-card">', unsafe_allow_html=True)
 u_col1, u_col2 = st.columns([2, 1])
@@ -290,12 +237,9 @@ with u_col1:
         st.rerun()
 with u_col2:
     st.markdown("<br>", unsafe_allow_html=True)
-    st.success(f"🔥 チャット連続記録: {get_streak(st.session_state.user_name)} 日目！")
+    st.success(f"🔥 連続記録: {get_streak(st.session_state.user_name)} 日目！")
 st.markdown("</div>", unsafe_allow_html=True)
 
-# ==========================================
-# 6. サイドバー
-# ==========================================
 with st.sidebar:
     st.title("🧭 メニュー")
     selected_grade = st.selectbox("学年を変える", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
@@ -313,7 +257,7 @@ with st.sidebar:
 
     active_prompt = get_system_prompt(st.session_state.selected_grade, st.session_state.selected_persona)
     st.divider()
-    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場", "📊 学習記録レポート"])
+    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場"])
 
     if "threads" not in st.session_state:
         init_id, init_thread = create_new_thread(active_prompt, st.session_state.selected_grade)
@@ -330,94 +274,63 @@ with st.sidebar:
             st.rerun()
         
         thread_options = {tid: data["title"] for tid, data in st.session_state.threads.items()}
-        selected_thread_id = st.radio("これまでの会話:", options=list(thread_options.keys()), format_func=lambda x: thread_options[x], index=list(thread_options.keys()).index(st.session_state.current_thread_id))
-        st.session_state.current_thread_id = selected_thread_id
+        st.session_state.current_thread_id = st.radio("これまでの会話:", options=list(thread_options.keys()), format_func=lambda x: thread_options[x], index=list(thread_options.keys()).index(st.session_state.current_thread_id))
 
     st.divider()
     api_key = st.secrets.get("OPENAI_API_KEY", "")
     if not api_key: api_key = st.text_input("OpenAI APIキーを入力", type="password")
-    selected_model = st.selectbox("🧠 AIのモデル", ["gpt-4o", "gpt-4o-mini"], index=0)
+    selected_model = st.selectbox("🧠 AIモデル", ["gpt-4o", "gpt-4o-mini"], index=1)
 
 # ==========================================
-# 7. メイン画面の切り替え
+# 6. メイン機能（チャット / クイズ）
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
-    if current_thread["messages"][0]["role"] == "system":
-        current_thread["messages"][0]["content"] = active_prompt
-
-    # --- 日替わりコンテンツ ---
+    
+    # 日替わりコンテンツ（折りたたみ）
     today_str = date.today().isoformat()
     current_state_key = f"{today_str}_{st.session_state.selected_grade}_{selected_model}"
-    is_child = "小学" in st.session_state.selected_grade
-
     if not api_key: daily_data = DEFAULT_CONTENT
     else:
         if st.session_state.content_date_grade != current_state_key or st.session_state.daily_content is None:
-            with st.spinner("🧠 ハカセが今日の問題と豆知識を考え中..."):
+            with st.spinner("🧠 今日の探検を準備中..."):
                 new_data = generate_daily_content(api_key, st.session_state.selected_grade, selected_model, today_str)
                 if new_data:
                     st.session_state.daily_content = new_data
                     st.session_state.content_date_grade = current_state_key
-                    
-                    # 豆知識の順番をシャッフルして記憶
-                    keys = list(new_data.get("trivia", {}).keys())
-                    random.shuffle(keys)
-                    st.session_state.trivia_order = keys
-                    
                     daily_data = new_data
                 else: daily_data = DEFAULT_CONTENT
         else: daily_data = st.session_state.daily_content
 
-    todays_exp = daily_data.get("experiment", {})
-    todays_prob = daily_data.get("problem", {})
-    todays_trivias = daily_data.get("trivia", {})
-
-    col_daily1, col_daily2 = st.columns(2)
-    with col_daily1:
-        st.markdown(f'<div class="exp-card"><h5 style="margin-top:0;">⏱️ 本日の実験</h5><b>{todays_exp.get("title", "")}</b><br><span style="font-size: 14px;">{todays_exp.get("desc", "")}</span><div style="margin-top: 5px; font-size: 12px; color: #d32f2f;">※結果がどうなったかハカセに教えてね！</div></div>', unsafe_allow_html=True)
-    with col_daily2:
-        st.markdown(f'<div class="prob-card"><h5 style="margin-top:0;">{todays_prob.get("title", "")}</h5><b style="font-size: 14px;">Q: {todays_prob.get("question", "")}</b><br><span style="font-size: 13px; color: #6a1b9a;">💡 ヒント: {todays_prob.get("hint", "")}</span></div>', unsafe_allow_html=True)
-
-    st.markdown('<h5 style="margin-top:10px;">💡 今日の豆知識</h5>', unsafe_allow_html=True)
-    t_cols = st.columns(2)
-    
-    trivia_keys = st.session_state.get("trivia_order", list(todays_trivias.keys()))
-    
-    for idx, cat in enumerate(trivia_keys):
-        trivia_text = todays_trivias.get(cat, "")
-        if not trivia_text: continue
-        with t_cols[idx % 2]:
-            expander_title = f"📚 豆知識 {idx+1}" if is_child else f"📚 【{cat}】の豆知識"
-            with st.expander(expander_title, expanded=True):
-                st.markdown(f"> {trivia_text}")
-                if st.button("🗣️ 詳しく聞く", key=f"trivia_btn_{cat}"):
-                    st.session_state.auto_send_msg = f"「{trivia_text}」についてもっと教えて！"
+    with st.expander("🎁 今日の探検コンテンツ（タップで開閉）", expanded=True):
+        tab1, tab2, tab3 = st.tabs(["🧪 実験", "✍️ 問題", "💡 豆知識"])
+        with tab1: st.markdown(f'<div class="exp-card"><h5>{daily_data.get("experiment", {}).get("title", "")}</h5><span style="font-size:14px;">{daily_data.get("experiment", {}).get("desc", "")}</span></div>', unsafe_allow_html=True)
+        with tab2: st.markdown(f'<div class="prob-card"><h5>{daily_data.get("problem", {}).get("title", "")}</h5><b style="font-size:14px;">Q: {daily_data.get("problem", {}).get("question", "")}</b><br><span style="font-size:13px; color:#6a1b9a;">💡 ヒント: {daily_data.get("problem", {}).get("hint", "")}</span></div>', unsafe_allow_html=True)
+        with tab3:
+            for cat, text in daily_data.get("trivia", {}).items():
+                st.markdown(f"**📚 【{cat}】**<br>{text}", unsafe_allow_html=True)
+                if st.button(f"もっと聞く", key=f"btn_{cat}"):
+                    st.session_state.auto_send_msg = f"「{text}」について詳しく教えて！"
                     st.rerun()
 
-    st.markdown("<hr style='margin: 20px 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-    # --- チャット履歴表示 ---
-    non_system_msgs = [m for m in current_thread["messages"] if m["role"] != "system"]
-    for msg in non_system_msgs:
+    # チャット履歴表示
+    for msg in [m for m in current_thread["messages"] if m["role"] != "system"]:
         with st.chat_message(msg["role"], avatar="🎓" if msg["role"] == "assistant" else "👦"):
-            if "image" in msg and msg["image"]: st.image(msg["image"], use_container_width=True)
-            content = msg["content"]
-            if msg["role"] == "assistant" and "---" in content: content = content.split("---")[0].strip()
-            st.markdown(content, unsafe_allow_html=True)
+            if "image" in msg and msg["image"]: st.image(msg["image"])
+            content = msg["content"].split("---")[0].strip() if msg["role"] == "assistant" and "---" in msg["content"] else msg["content"]
+            st.markdown(content)
 
     if st.session_state.suggested_questions:
-        st.caption("💡 おすすめの質問（タップで聞けるよ！）")
         q_cols = st.columns(min(len(st.session_state.suggested_questions), 3))
         for i, q in enumerate(st.session_state.suggested_questions[:3]):
             if q_cols[i].button(q, key=f"sug_q_{i}"):
                 st.session_state.auto_send_msg = q
                 st.rerun()
 
-    # --- チャット入力 ---
-    uploaded_file = st.file_uploader("📷 しゃしんを えらぶ", type=["jpg", "jpeg", "png"], key=f"uploader_{st.session_state.uploader_key}")
+    # チャット入力とログ保存
     user_input = st.chat_input("ここに メッセージを かこう！")
-    
     if st.session_state.auto_send_msg:
         user_input = st.session_state.auto_send_msg
         st.session_state.auto_send_msg = None
@@ -426,83 +339,61 @@ if "チャット" in page:
         if not api_key: st.error("👈 APIキーを入力してね！")
         else:
             current_time = time.time()
-            elapsed_time = current_time - st.session_state.last_send_time
+            elapsed = current_time - st.session_state.last_send_time
             st.session_state.last_send_time = current_time
-            
-            save_user_stat(st.session_state.user_name, st.session_state.current_thread_id, current_thread["title"], len(user_input), len(user_input) / (elapsed_time / 60) if elapsed_time > 0 else 0, len(set(user_input)), user_input)
+            typing_speed = len(user_input) / (elapsed / 60) if elapsed > 0 else 0
 
-            if any(word in user_input for word in ["実験", "できた", "結果", "やった", "答え", "わかった"]):
+            if any(w in user_input for w in ["実験", "できた", "結果", "やった", "答え"]):
                 update_streak(st.session_state.user_name)
-                st.toast("🔥 れんぞく記録がのびたよ！", icon="🎉")
+                st.toast("🔥 連続記録がのびたよ！", icon="🎉")
 
-            if current_thread["title"].startswith("あたらしい") and len(current_thread["messages"]) <= 2: current_thread["title"] = f"💬 {user_input[:12]}..."
-            
-            api_content = [{"type": "text", "text": user_input}]
-            image_data = None
-            if uploaded_file:
-                image_data = uploaded_file.getvalue()
-                api_content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{encode_image(image_data)}", "detail": "low"}})
+            if current_thread["title"].startswith("テーマ") and len(current_thread["messages"]) <= 2:
+                current_thread["title"] = f"💬 {user_input[:10]}..."
 
-            current_thread["messages"].append({"role": "user", "content": user_input, "image": image_data, "api_content": api_content})
-            st.session_state.suggested_questions = []
-
-            with st.chat_message("user", avatar="👦"):
-                if image_data: st.image(image_data)
-                st.markdown(user_input)
+            current_thread["messages"].append({"role": "user", "content": user_input})
+            with st.chat_message("user", avatar="👦"): st.markdown(user_input)
 
             with st.chat_message("assistant", avatar="🎓"):
                 with st.spinner("ハカセが かんがえ中..."):
-                    api_msgs = [{"role": m["role"], "content": m.get("api_content", m["content"])} for m in current_thread["messages"][-6:]]
+                    api_msgs = [{"role": m["role"], "content": m["content"]} for m in current_thread["messages"][-5:]]
                     api_msgs.insert(0, {"role": "system", "content": current_thread["messages"][0]["content"]})
 
                     res = openai.OpenAI(api_key=api_key).chat.completions.create(model=selected_model, messages=api_msgs)
                     reply = res.choices[0].message.content
                     
-                    display_reply = reply
-                    suggested_qs = []
-                    if "---" in reply:
-                        parts = reply.split("---")
-                        display_reply = parts[0].strip()
-                        qs_text = parts[1].strip()
-                        for line in qs_text.split('\n'):
-                            if line.strip() and (line.strip()[0].isdigit() or line.startswith('-') or line.startswith('*')):
-                                clean_q = line.strip().lstrip('1234567890.-* []')
-                                if clean_q: suggested_qs.append(clean_q)
-                    
+                    # --- 📝 ここでチャット内容をCSVに保存！ ---
+                    save_chat_log(st.session_state.user_name, current_thread["title"], user_input, reply, len(user_input), typing_speed)
+
+                    display_reply = reply.split("---")[0].strip() if "---" in reply else reply
                     st.markdown(display_reply)
-            
+
             current_thread["messages"].append({"role": "assistant", "content": reply})
-            if suggested_qs: st.session_state.suggested_questions = suggested_qs
-            st.session_state.uploader_key += 1
+            
+            if "---" in reply:
+                qs_text = reply.split("---")[1].strip()
+                st.session_state.suggested_questions = [line.strip().lstrip('1234567890.-* []') for line in qs_text.split('\n') if line.strip() and (line.strip()[0].isdigit() or line.startswith('-') or line.startswith('*'))]
+            else: st.session_state.suggested_questions = []
+            
             st.rerun()
 
 elif "🎯 クイズ道場" in page:
     st.title("🎯 クイズ道場")
     q_stats = get_quiz_stats(st.session_state.user_name)
     accuracy = (q_stats['correct'] / q_stats['total'] * 100) if q_stats['total'] > 0 else 0
-
     qc1, qc2, qc3 = st.columns(3)
     qc1.metric("挑戦回数", f"{q_stats['total']} 回")
     qc2.metric("正解数", f"{q_stats['correct']} 問")
     qc3.metric("正答率", f"{accuracy:.1f} %")
-    st.caption(f"🔥 現在の連続正解: {q_stats['streak']} 問")
-
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    if not api_key:
-        st.warning("👈 クイズを生成するにはAPIキーを入力してね！")
+    if not api_key: st.warning("👈 クイズを生成するにはAPIキーを入力してね！")
     else:
         if st.session_state.quiz_data is None:
-            if st.button("✨ 新しいクイズを出題する！", use_container_width=True):
-                with st.spinner("AIがクイズを作っています..."):
-                    q_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
-                    if q_data:
-                        st.session_state.quiz_data = q_data
-                        st.session_state.quiz_answered = False
-                        st.session_state.quiz_selected = None
-                        st.rerun()
-                    else:
-                        st.error("クイズの作成に失敗しました。もう一度試してね。")
+            if st.button("✨ 新しいクイズを出題する！"):
+                with st.spinner("クイズ作成中..."):
+                    st.session_state.quiz_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
+                    st.session_state.quiz_answered = False
+                    st.rerun()
         else:
             q_data = st.session_state.quiz_data
             st.markdown(f'<div class="quiz-card"><h4>Q. {q_data["question"]}</h4></div>', unsafe_allow_html=True)
@@ -511,60 +402,16 @@ elif "🎯 クイズ道場" in page:
                 for i, choice in enumerate(q_data["choices"]):
                     if st.button(f"{i+1}. {choice}", use_container_width=True):
                         st.session_state.quiz_answered = True
-                        st.session_state.quiz_selected = i
                         is_correct = (i == q_data["correct_index"])
+                        # --- 📝 ここでクイズ成績をJSONに保存！ ---
                         update_quiz_stats(st.session_state.user_name, is_correct)
+                        st.session_state.quiz_selected = i
                         st.rerun()
             else:
                 is_correct = (st.session_state.quiz_selected == q_data["correct_index"])
-                if is_correct: st.success(f"🎉 大正解！！ あなたの答え: {q_data['choices'][st.session_state.quiz_selected]}")
+                if is_correct: st.success("🎉 大正解！！")
                 else: st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
-                
                 st.info(f"💡 【解説】\n{q_data['explanation']}")
-
-                if st.button("⏭️ 次の問題へ", use_container_width=True):
-                    with st.spinner("AIが次の問題を作っています..."):
-                        new_q_data = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
-                        if new_q_data:
-                            st.session_state.quiz_data = new_q_data
-                            st.session_state.quiz_answered = False
-                            st.session_state.quiz_selected = None
-                            st.rerun()
-                        else:
-                            st.error("クイズの作成に失敗しました。")
-                            st.session_state.quiz_data = None
-                            st.rerun()
-
-else:
-    st.title("📊 学習記録レポート")
-    st.subheader("💬 チャットの記録")
-    df = load_user_data(st.session_state.user_name)
-    if df.empty:
-        st.info("まだチャットデータがないみたい！お話ししてみてね。")
-    else:
-        col1, col2, col3 = st.columns(3)
-        col1.metric("総メッセージ数", f"{len(df)} 回")
-        col2.metric("総入力文字数", f"{df['char_count'].sum()} 文字")
-        col3.metric("平均タイピング速度", f"{round(df['typing_speed'].mean(), 1)} 文字/分")
-        
-        st.markdown("##### 📈 入力文字数の推移")
-        df['timestamp_dt'] = pd.to_datetime(df['timestamp'])
-        chart_data = df.set_index('timestamp_dt')[['char_count']]
-        st.line_chart(chart_data)
-
-        st.markdown("##### 📝 最近のやりとり")
-        display_df = df[['timestamp', 'thread_title', 'text', 'char_count']].tail(10).sort_values("timestamp", ascending=False)
-        display_df.columns = ['日時', 'テーマ', '入力内容', '文字数']
-        st.dataframe(display_df, hide_index=True)
-
-    st.markdown("<hr>", unsafe_allow_html=True)
-    st.subheader("🎯 クイズ道場の記録")
-    q_stats = get_quiz_stats(st.session_state.user_name)
-    if q_stats['total'] == 0:
-        st.info("まだクイズに挑戦していないみたい！「クイズ道場」で遊んでみてね。")
-    else:
-        accuracy = (q_stats['correct'] / q_stats['total'] * 100)
-        qc1, qc2, qc3 = st.columns(3)
-        qc1.metric("総挑戦回数", f"{q_stats['total']} 回")
-        qc2.metric("総正解数", f"{q_stats['correct']} 問")
-        qc3.metric("通算正答率", f"{accuracy:.1f} %")
+                if st.button("⏭️ 次の問題へ"):
+                    st.session_state.quiz_data = None
+                    st.rerun()
