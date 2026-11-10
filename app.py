@@ -23,6 +23,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# 裏側でAPIキーを取得（Streamlit Secrets または 環境変数から）
+# ※ 画面上には一切表示・要求しません
+API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+
 STATS_FILE = "user_stats.csv"
 STREAK_FILE = "user_streaks.json"
 QUIZ_STATS_FILE = "quiz_stats.json"
@@ -43,9 +47,9 @@ PERSONA_OPTIONS = [
 ]
 
 DEFAULT_CONTENT = {
-    "experiment": {"title": "🔑 APIキーをいれてね", "desc": "左のメニューからAPIキーを設定すると、ハカセが今日の実験を考えてくれるよ！"},
-    "problem": {"title": "🧪 今日の挑戦問題", "question": "APIキーを設定すると、ここに計算問題やクイズが出るよ！", "hint": "ヒントもここに出るよ。"},
-    "trivia": {"物理": "APIキーを入れると豆知識が見られるよ！", "化学": "APIキーを入れると豆知識が見られるよ！", "生物": "APIキーを入れると豆知識が見られるよ！", "地学・宇宙": "APIキーを入れると豆知識が見られるよ！"}
+    "experiment": {"title": "🧪 今日の実験", "desc": "AIが今日の実験を準備できなかったみたい。ハカセに直接聞いてみてね！"},
+    "problem": {"title": "🧪 今日の挑戦問題", "question": "問題の準備に失敗しちゃった。ハカセに「問題を出して」とお願いしてみてね！", "hint": "ー"},
+    "trivia": {"物理": "準備中だよ！", "化学": "準備中だよ！", "生物": "準備中だよ！", "地学・宇宙": "準備中だよ！"}
 }
 
 # ==========================================
@@ -214,8 +218,7 @@ if not st.session_state.user_name.strip():
     このアプリは、AIの「探検ハカセ」と一緒に理科のふしぎを学ぶチャットアプリです。
     
     1. まずは下の欄に **「おなまえ」と「学年」** を入れて探検をスタート！
-    2. 次の画面の左メニューから **OpenAI APIキー** をセットしてね。
-    3. ハカセの性格を選んだら、ふしぎに思ったことを何でも質問してみよう！
+    2. ハカセの性格を選んだら、ふしぎに思ったことを何でも質問してみよう！
     """)
 
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
@@ -253,13 +256,10 @@ with st.sidebar:
     
     with st.expander("🔰 はじめての方へ（使い方）"):
         st.markdown("""
-        **① APIキーをセットしよう**
-        下の入力欄に「OpenAI APIキー」を入れてね。これがないとハカセはお返事できません。
-        
-        **② 学年とハカセの性格をえらぼう**
+        **① 学年とハカセの性格をえらぼう**
         自分に合った学年と、好きなハカセの性格を選んでね。
         
-        **③ ハカセとお話ししよう！**
+        **② ハカセとお話ししよう！**
         「今日の探検コンテンツ」をやってみたり、ふしぎに思ったことを何でも質問してみよう！
         """)
 
@@ -298,8 +298,6 @@ with st.sidebar:
         st.session_state.current_thread_id = st.radio("これまでの会話:", options=list(thread_options.keys()), format_func=lambda x: thread_options[x], index=list(thread_options.keys()).index(st.session_state.current_thread_id))
 
     st.divider()
-    api_key = st.secrets.get("OPENAI_API_KEY", "")
-    if not api_key: api_key = st.text_input("OpenAI APIキーを入力", type="password")
     selected_model = st.selectbox("🧠 AIモデル", ["gpt-4o", "gpt-4o-mini"], index=1)
 
 # ==========================================
@@ -310,11 +308,12 @@ if "チャット" in page:
     today_str = date.today().isoformat()
     current_state_key = f"{today_str}_{st.session_state.selected_grade}_{selected_model}"
     
-    if not api_key: daily_data = DEFAULT_CONTENT
+    if not API_KEY: 
+        daily_data = DEFAULT_CONTENT
     else:
         if st.session_state.content_date_grade != current_state_key or st.session_state.daily_content is None:
             with st.spinner("🧠 今日の探検を準備中..."):
-                new_data = generate_daily_content(api_key, st.session_state.selected_grade, selected_model, today_str)
+                new_data = generate_daily_content(API_KEY, st.session_state.selected_grade, selected_model, today_str)
                 if new_data:
                     st.session_state.daily_content = new_data
                     st.session_state.content_date_grade = current_state_key
@@ -354,7 +353,8 @@ if "チャット" in page:
         st.session_state.auto_send_msg = None
 
     if user_input:
-        if not api_key: st.error("👈 APIキーを入力してね！")
+        if not API_KEY: 
+            st.error("⚠️ システムエラー：APIキーが設定されていません。管理者に連絡してください。")
         else:
             current_time = time.time()
             elapsed = current_time - st.session_state.last_send_time
@@ -376,7 +376,7 @@ if "チャット" in page:
                     api_msgs = [{"role": m["role"], "content": m["content"]} for m in current_thread["messages"][-5:]]
                     api_msgs.insert(0, {"role": "system", "content": current_thread["messages"][0]["content"]})
 
-                    res = openai.OpenAI(api_key=api_key).chat.completions.create(model=selected_model, messages=api_msgs)
+                    res = openai.OpenAI(api_key=API_KEY).chat.completions.create(model=selected_model, messages=api_msgs)
                     reply = res.choices[0].message.content
                     
                     save_chat_log(st.session_state.user_name, current_thread["title"], user_input, reply, len(user_input), typing_speed)
@@ -402,12 +402,13 @@ elif "🎯 クイズ道場" in page:
     qc3.metric("正答率", f"{accuracy:.1f} %")
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    if not api_key: st.warning("👈 クイズを生成するにはAPIキーを入力してね！")
+    if not API_KEY: 
+        st.error("⚠️ システムエラー：APIキーが設定されていません。管理者に連絡してください。")
     else:
         if st.session_state.quiz_data is None:
             if st.button("✨ 新しいクイズを出題する！"):
                 with st.spinner("クイズ作成中..."):
-                    new_quiz = generate_quiz(api_key, st.session_state.selected_grade, selected_model)
+                    new_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
                     if new_quiz is None:
                         st.error("⚠️ AIがクイズの作成に失敗しました。もう一度「新しいクイズを出題する」ボタンを押してください！")
                     else:
