@@ -24,7 +24,6 @@ st.set_page_config(
 )
 
 # 裏側でAPIキーを取得（Streamlit Secrets または 環境変数から）
-# ※ 画面上には一切表示・要求しません
 API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
 
 STATS_FILE = "user_stats.csv"
@@ -53,7 +52,7 @@ DEFAULT_CONTENT = {
 }
 
 # ==========================================
-# 2. 関数定義（ログ保存・MEXTガイドライン対応）
+# 2. 関数定義
 # ==========================================
 def save_chat_log(user_name, thread_title, user_message, ai_response, char_count, typing_speed):
     file_exists = os.path.isfile(STATS_FILE)
@@ -148,11 +147,9 @@ def generate_quiz(api_key, grade_name, model_name):
         res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
         data = json.loads(res.choices[0].message.content)
         
-        # AIが "quiz" という余分な箱に入れてしまった場合の救済処理
         if "quiz" in data and isinstance(data["quiz"], dict):
             data = data["quiz"]
             
-        # 必要なデータ（問題文や選択肢）がちゃんと揃っているか確認
         if "question" not in data or "choices" not in data or "correct_index" not in data:
             return None 
             
@@ -208,17 +205,19 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 初回登録画面（オンボーディング）
+# 4. 初回登録画面
 # ==========================================
 if not st.session_state.user_name.strip():
     st.title("🌟 わくわく理科探検チャット")
     
     st.info("""
     **🔰 はじめての方へ（使い方）**
-    このアプリは、AIの「探検ハカセ」と一緒に理科のふしぎを学ぶチャットアプリです。
+    このアプリは、AIの「探検ハカセ」と一緒に理科のふしぎを学ぶアプリです。
     
-    1. まずは下の欄に **「おなまえ」と「学年」** を入れて探検をスタート！
-    2. ハカセの性格を選んだら、ふしぎに思ったことを何でも質問してみよう！
+    1. **おなまえと学年** を入れてスタート！
+    2. **チャット** でハカセに質問してみよう。
+    3. **クイズ道場** で自分の知識をためそう。
+    4. **学習きろく** で自分の成長をチェックできるよ！
     """)
 
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
@@ -237,7 +236,7 @@ if not st.session_state.user_name.strip():
     st.stop() 
 
 # ==========================================
-# 5. メイン画面ヘッダー & サイドバー
+# 5. サイドバー
 # ==========================================
 st.markdown('<div class="user-card">', unsafe_allow_html=True)
 u_col1, u_col2 = st.columns([2, 1])
@@ -260,7 +259,13 @@ with st.sidebar:
         自分に合った学年と、好きなハカセの性格を選んでね。
         
         **② ハカセとお話ししよう！**
-        「今日の探検コンテンツ」をやってみたり、ふしぎに思ったことを何でも質問してみよう！
+        ふしぎに思ったことをチャットで何でも質問してみよう。
+        
+        **③ クイズ道場でうでだめし！**
+        「🎯 クイズ道場」では、学年に合わせた理科の4択クイズに挑戦できるよ。
+        
+        **④ 学習きろくをチェック！**
+        「📊 学習きろく」で、これまでの入力文字数やタイピングの速さ、クイズの正解数を確認して成長を実感しよう！
         """)
 
     selected_grade = st.selectbox("学年を変える", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
@@ -278,7 +283,7 @@ with st.sidebar:
 
     active_prompt = get_system_prompt(st.session_state.selected_grade, st.session_state.selected_persona)
     st.divider()
-    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場"])
+    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場", "📊 学習きろく"])
 
     if "threads" not in st.session_state:
         init_id, init_thread = create_new_thread(active_prompt, st.session_state.selected_grade)
@@ -301,7 +306,7 @@ with st.sidebar:
     selected_model = st.selectbox("🧠 AIモデル", ["gpt-4o", "gpt-4o-mini"], index=1)
 
 # ==========================================
-# 6. メイン機能（チャット / クイズ）
+# 6. メイン機能（チャット / クイズ / きろく）
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
@@ -435,3 +440,36 @@ elif "🎯 クイズ道場" in page:
                 if st.button("⏭️ 次の問題へ"):
                     st.session_state.quiz_data = None
                     st.rerun()
+
+elif "📊 学習きろく" in page:
+    st.title("📊 学習きろく")
+    st.write(f"**{st.session_state.user_name}** さんのこれまでの探検のきろくだよ！")
+
+    st.subheader("🎯 クイズの成績")
+    q_stats = get_quiz_stats(st.session_state.user_name)
+    accuracy = (q_stats['correct'] / q_stats['total'] * 100) if q_stats['total'] > 0 else 0
+    qc1, qc2, qc3, qc4 = st.columns(4)
+    qc1.metric("挑戦回数", f"{q_stats['total']} 回")
+    qc2.metric("正解数", f"{q_stats['correct']} 問")
+    qc3.metric("正答率", f"{accuracy:.1f} %")
+    qc4.metric("連続正解", f"{q_stats['streak']} 問")
+
+    st.subheader("💬 チャットのきろく")
+    if os.path.exists(STATS_FILE):
+        df = pd.read_csv(STATS_FILE)
+        user_df = df[df['user_name'] == st.session_state.user_name]
+        
+        if not user_df.empty:
+            total_chars = user_df['char_count'].sum()
+            avg_speed = user_df['typing_speed'].mean()
+            
+            sc1, sc2 = st.columns(2)
+            sc1.metric("入力した文字の数（合計）", f"{total_chars} 文字")
+            sc2.metric("タイピングの速さ（平均）", f"{avg_speed:.1f} 文字/分")
+            
+            st.markdown("<br>▼ **最近のしつもん**", unsafe_allow_html=True)
+            st.dataframe(user_df[['timestamp', 'user_message']].tail(10), use_container_width=True, hide_index=True)
+        else:
+            st.info("まだチャットのきろくがないみたい。ハカセに質問してみよう！")
+    else:
+        st.info("まだきろくファイルがないよ。チャットを始めるとここに記録が残ります。")
