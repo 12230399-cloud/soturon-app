@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import json
+import time
 
 st.set_page_config(page_title="管理者ダッシュボード", page_icon="👑", layout="wide")
 
@@ -28,7 +29,7 @@ if "admin_auth" not in st.session_state:
 st.title("👑 管理者専用ダッシュボード")
 
 if not st.session_state.admin_auth:
-    st.info("先生・保護者向けの管理画面です。パスワードを入力してください。")
+    st.info("先生・研究者向けの管理画面です。パスワードを入力してください。")
     pw = st.text_input("パスワード (デフォルト: admin)", type="password")
     if st.button("ログイン"):
         if pw == ADMIN_PW:
@@ -52,7 +53,6 @@ with tab1:
     if os.path.exists(STATS_FILE):
         df_chat = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
         
-        # 【新機能】グラフ表示
         if not df_chat.empty:
             char_counts = df_chat.groupby("user_name")["char_count"].sum()
             st.markdown("##### 📊 合計入力文字数")
@@ -71,7 +71,6 @@ with tab2:
         if q_data:
             df_quiz = pd.DataFrame.from_dict(q_data, orient='index')
             
-            # 【新機能】グラフ表示
             st.markdown("##### 📊 正解数 / 挑戦回数")
             if 'correct' in df_quiz.columns and 'total' in df_quiz.columns:
                 st.bar_chart(df_quiz[['correct', 'total']])
@@ -83,8 +82,8 @@ with tab2:
         st.write("まだクイズの記録がありません。")
 
 with tab3:
-    st.subheader("⚙️ 危険な操作 (データリセット)")
-    st.warning("⚠️ 以下のボタンを押すとデータが完全に消去されます。元には戻せません。")
+    st.subheader("⚙️ データリセット操作")
+    st.warning("⚠️ ボタンを押すと研究データが消去されます。必要なデータは事前にダウンロードしてください。")
     
     col1, col2, col3 = st.columns(3)
     with col1:
