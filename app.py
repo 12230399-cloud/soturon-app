@@ -23,7 +23,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# 裏側でAPIキーを取得（Streamlit Secrets または 環境変数から）
+# Secrets または環境変数からAPIキーを取得
 API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
 
 STATS_FILE = "user_stats.csv"
@@ -262,7 +262,7 @@ with st.sidebar:
         ふしぎに思ったことをチャットで何でも質問してみよう。
         
         **③ クイズ道場でうでだめし！**
-        「🎯 クイズ道場」では、学年に合わせた理科の4択クイズに挑戦できるよ。
+        「🎯 クイズ道場」では、学用に合わせた理科の4択クイズに挑戦できるよ。
         
         **④ 学習きろくをチェック！**
         「📊 学習きろく」で、これまでの入力文字数やタイピングの速さ、クイズの正解数を確認して成長を実感しよう！
@@ -411,11 +411,11 @@ elif "🎯 クイズ道場" in page:
         st.error("⚠️ システムエラー：APIキーが設定されていません。管理者に連絡してください。")
     else:
         if st.session_state.quiz_data is None:
-            if st.button("✨ 新しいクイズを出題する！"):
+            if st.button("✨ 新しいクイズを出題する！", type="primary"):
                 with st.spinner("クイズ作成中..."):
                     new_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
                     if new_quiz is None:
-                        st.error("⚠️ AIがクイズの作成に失敗しました。もう一度「新しいクイズを出題する」ボタンを押してください！")
+                        st.error("⚠️ AIがクイズの作成に失敗しました。もう一度ボタンを押してください！")
                     else:
                         st.session_state.quiz_data = new_quiz
                         st.session_state.quiz_answered = False
@@ -437,9 +437,24 @@ elif "🎯 クイズ道場" in page:
                 if is_correct: st.success("🎉 大正解！！")
                 else: st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
                 st.info(f"💡 【解説】\n{q_data['explanation']}")
-                if st.button("⏭️ 次の問題へ"):
-                    st.session_state.quiz_data = None
-                    st.rerun()
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("⏭️ 次の問題へ", type="primary", use_container_width=True):
+                        with st.spinner("次の問題を作成中..."):
+                            next_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
+                            if next_quiz:
+                                st.session_state.quiz_data = next_quiz
+                                st.session_state.quiz_answered = False
+                            else:
+                                st.error("⚠️ クイズの作成に失敗しました。")
+                                st.session_state.quiz_data = None
+                            st.rerun()
+                with col2:
+                    if st.button("🛑 やめる", use_container_width=True):
+                        st.session_state.quiz_data = None
+                        st.rerun()
 
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
@@ -456,7 +471,7 @@ elif "📊 学習きろく" in page:
 
     st.subheader("💬 チャットのきろく")
     if os.path.exists(STATS_FILE):
-        df = pd.read_csv(STATS_FILE)
+        df = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
         user_df = df[df['user_name'] == st.session_state.user_name]
         
         if not user_df.empty:
