@@ -240,6 +240,19 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.title("🧭 メニュー")
+    
+    with st.expander("🔰 はじめての方へ（使い方）"):
+        st.markdown("""
+        **① APIキーをセットしよう**
+        下の入力欄に「OpenAI APIキー」を入れてね。これがないとハカセはお返事できません。
+        
+        **② 学年とハカセの性格をえらぼう**
+        自分に合った学年と、好きなハカセの性格を選んでね。
+        
+        **③ ハカセとお話ししよう！**
+        「今日の探検コンテンツ」をやってみたり、ふしぎに思ったことを何でも質問してみよう！
+        """)
+
     selected_grade = st.selectbox("学年を変える", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
     selected_persona = st.selectbox("ハカセの性格", PERSONA_OPTIONS, index=PERSONA_OPTIONS.index(st.session_state.selected_persona))
     
