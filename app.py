@@ -208,8 +208,18 @@ st.markdown("""
 # ==========================================
 if not st.session_state.user_name.strip():
     st.title("🌟 わくわく理科探検チャット")
+    
+    st.info("""
+    **🔰 はじめての方へ（使い方）**
+    このアプリは、AIの「探検ハカセ」と一緒に理科のふしぎを学ぶチャットアプリです。
+    
+    1. まずは下の欄に **「おなまえ」と「学年」** を入れて探検をスタート！
+    2. 次の画面の左メニューから **OpenAI APIキー** をセットしてね。
+    3. ハカセの性格を選んだら、ふしぎに思ったことを何でも質問してみよう！
+    """)
+
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
-    st.info("👋 はじめまして！まずはあなたのことを教えてね！")
+    st.markdown("👋 **はじめまして！まずはあなたのことを教えてね！**")
     col1, col2 = st.columns(2)
     with col1: input_name = st.text_input("👤 あなたの おなまえ", key="first_name_input")
     with col2: input_grade = st.selectbox("🎓 学年を選んでね", GRADE_OPTIONS, index=2, key="first_grade_input")
