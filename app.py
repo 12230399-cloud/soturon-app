@@ -376,56 +376,99 @@ if "チャット" in page:
 
 elif "🎯 クイズ道場" in page:
     st.title("🎯 クイズ道場")
-    q_stats = get_quiz_stats(st.session_state.user_name)
-    accuracy = (q_stats['correct'] / q_stats['total'] * 100) if q_stats['total'] > 0 else 0
-    qc1, qc2, qc3 = st.columns(3)
-    qc1.metric("挑戦回数", f"{q_stats['total']} 回")
-    qc2.metric("正解数", f"{q_stats['correct']} 問")
-    qc3.metric("正答率", f"{accuracy:.1f} %")
-    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown("<div class='quiz-card'>ここでは、キミの学年にぴったりの理科クイズに挑戦できるよ！全問正解めざしてがんばろう！</div>", unsafe_allow_html=True)
+    
+    import json
+    
+    # セッションステートの初期化
+    if "ai_quiz_data" not in st.session_state:
+        st.session_state.ai_quiz_data = None
+    if "ai_quiz_answered" not in st.session_state:
+        st.session_state.ai_quiz_answered = False
 
-    if not API_KEY: st.error("⚠️ システムエラー：APIキーが設定されていません。")
-    else:
-        if st.session_state.quiz_data is None:
-            if st.button("✨ 新しいクイズを出題する！", type="primary"):
-                with st.spinner("クイズ作成中..."):
-                    new_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
-                    if new_quiz:
-                        st.session_state.quiz_data = new_quiz
-                        st.session_state.quiz_answered = False
-                        st.rerun()
-        else:
-            q_data = st.session_state.quiz_data
-            st.markdown(f'<div class="quiz-card"><h4>Q. {q_data["question"]}</h4></div>', unsafe_allow_html=True)
+    if "grade" not in st.session_state:
+        st.session_state.grade = "小学3年生"
+        
+    st.markdown("##### 🏫 挑戦するレベル")
+    selected_grade = st.selectbox(
+        "学年を選んでね：", 
+        ["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"],
+        index=["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"].index(st.session_state.grade)
+    )
+    st.session_state.grade = selected_grade
 
-            if not st.session_state.quiz_answered:
-                for i, choice in enumerate(q_data["choices"]):
-                    if st.button(f"{i+1}. {choice}", use_container_width=True):
-                        st.session_state.quiz_answered = True
-                        is_correct = (i == q_data["correct_index"])
-                        update_quiz_stats(st.session_state.user_name, is_correct)
-                        st.session_state.quiz_selected = i
-                        st.rerun()
-            else:
-                is_correct = (st.session_state.quiz_selected == q_data["correct_index"])
-                if is_correct: st.success("🎉 大正解！！")
-                else: st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
-                st.info(f"💡 【解説】\n{q_data['explanation']}")
+    # --- クイズを出題するボタン（裏側でAIが動く） ---
+    if st.button("🗡️ 新しい問題に挑戦する！", use_container_width=True):
+        # ユーザーには「問題を準備中」とだけ見せる
+        with st.spinner("新しい問題を準備中... しばらく待ってね！ぐるぐる...🤔"):
+            try:
+                # 裏側でAIが問題を生成
+                prompt = f"""
+                {selected_grade}向けの理科の4択クイズを1問作成してください。
+                必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
+                {{
+                    "question": "問題文",
+                    "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+                    "answer": "正解の選択肢の文字列（choicesの中の1つと完全一致させること）",
+                    "explanation": "{selected_grade}にわかりやすい言葉と漢字で書かれた解説"
+                }}
+                """
                 
-                col1, col2 = st.columns(2)
-                with col1:
-                    if st.button("⏭️ 次の問題へ", type="primary", use_container_width=True):
-                        with st.spinner("次の問題を作成中..."):
-                            next_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
-                            if next_quiz:
-                                st.session_state.quiz_data = next_quiz
-                                st.session_state.quiz_answered = False
-                            st.rerun()
-                with col2:
-                    if st.button("🛑 やめる", use_container_width=True):
-                        st.session_state.quiz_data = None
-                        st.rerun()
+                # APIリクエスト
+                response = client.chat.completions.create(
+                    model="gpt-3.5-turbo", # または gpt-4o-mini など
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7 
+                )
+                
+                ai_text = response.choices[0].message.content.strip()
+                
+                if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
+                elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
+                
+                st.session_state.ai_quiz_data = json.loads(ai_text)
+                st.session_state.ai_quiz_answered = False
+                
+                st.rerun() 
+                
+            except Exception as e:
+                st.error("問題の準備に失敗しちゃった。もう一度「挑戦する」を押してみてね！")
 
+    # --- 作成されたクイズの表示と回答処理 ---
+    if st.session_state.ai_quiz_data:
+        st.markdown("---")
+        q_data = st.session_state.ai_quiz_data
+        
+        st.caption(f"難易度: {selected_grade} レベル")
+        st.markdown(f"### Q. {q_data.get('question', '')}")
+        
+        user_choice = st.radio(
+            "答えを選んでね:", 
+            q_data.get("choices", []), 
+            disabled=st.session_state.ai_quiz_answered, 
+            index=None
+        )
+        
+        if not st.session_state.ai_quiz_answered:
+            if st.button("🚀 答える！"):
+                if user_choice:
+                    st.session_state.ai_quiz_answered = True
+                    st.rerun()
+                else:
+                    st.warning("選択肢を選んでから「答える！」を押してね。")
+        
+        if st.session_state.ai_quiz_answered:
+            correct_answer = q_data.get("answer", "")
+            
+            if user_choice == correct_answer:
+                st.success("🎉 大正解！！すごい！")
+                # 例: update_quiz_stats(st.session_state.user_name, True)
+            else:
+                st.error(f"残念！正解は「{correct_answer}」でした。")
+                # 例: update_quiz_stats(st.session_state.user_name, False)
+            
+            st.info("📝 **解説**\n\n" + q_data.get("explanation", ""))
+            
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
