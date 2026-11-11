@@ -473,10 +473,27 @@ elif "👑 管理者画面" in page:
             if os.path.exists(STATS_FILE):
                 df_chat = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
                 if not df_chat.empty:
+                    # 全体のグラフ
                     char_counts = df_chat.groupby("user_name")["char_count"].sum()
                     st.markdown("##### 📊 合計入力文字数")
                     st.bar_chart(char_counts)
-                st.dataframe(df_chat, use_container_width=True)
+                    
+                    st.markdown("---")
+                    st.markdown("##### 🔍 履歴の絞り込み")
+                    
+                    # 記録されているユーザー名の一覧を作成（「すべて」を先頭に追加）
+                    user_list = ["すべて"] + list(df_chat["user_name"].dropna().unique())
+                    selected_user = st.selectbox("確認したいユーザーを選んでください", user_list)
+                    
+                    # 選択したユーザーに合わせてデータを絞り込む
+                    if selected_user == "すべて":
+                        filtered_df = df_chat
+                    else:
+                        filtered_df = df_chat[df_chat["user_name"] == selected_user]
+                        
+                    # 絞り込んだ結果を表示
+                    st.dataframe(filtered_df, use_container_width=True)
+                    
                 with open(STATS_FILE, "rb") as f:
                     st.download_button("📥 チャットログ(CSV)をダウンロード", f, file_name="user_stats.csv", mime="text/csv")
             else: st.write("まだチャットの記録がありません。")
