@@ -380,21 +380,18 @@ elif "🎯 クイズ道場" in page:
     
     import json
     import os
-    
-    # -----------------------------------------------------------
-    # 【重要】AIを確実に動かすための設定
-    # ※クイズ画面専用にOpenAIの準備を行います
-    # -----------------------------------------------------------
     from openai import OpenAI
     
+    # -----------------------------------------------------------
+    # 【重要】APIキーの設定
+    # -----------------------------------------------------------
     try:
-        # APIキーを安全に読み込みます（お使いの環境に合わせて自動で探します）
         if "OPENAI_API_KEY" in st.secrets:
             api_key = st.secrets["OPENAI_API_KEY"]
         elif "OPENAI_API_KEY" in os.environ:
             api_key = os.environ["OPENAI_API_KEY"]
         else:
-            # ⚠️上の2つを使っていない場合は、ここの文字をAPIキーに書き換えてください！
+            # ⚠️ ここにあなたのAPIキーを貼り付けてください
             api_key = "sk-ここにあなたのAPIキーを貼り付けてください"
             
         client = OpenAI(api_key=api_key)
@@ -423,7 +420,6 @@ elif "🎯 クイズ道場" in page:
     if st.button("🗡️ 新しい問題に挑戦する！", use_container_width=True):
         with st.spinner("新しい問題を準備中... しばらく待ってね！ぐるぐる...🤔"):
             try:
-                # 裏側でAIが問題を生成
                 prompt = f"""
                 {selected_grade}向けの理科の4択クイズを1問作成してください。
                 必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
@@ -435,9 +431,9 @@ elif "🎯 クイズ道場" in page:
                 }}
                 """
                 
-                # APIリクエスト
+                # APIリクエスト (モデルを gpt-4o-mini に変更しました！)
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo", # GPT-4o-mini等を使っている場合は変更してください
+                    model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7 
                 )
@@ -453,7 +449,6 @@ elif "🎯 クイズ道場" in page:
                 st.rerun() 
                 
             except Exception as e:
-                # 万が一エラーが出た場合、何が原因か画面に表示するようにしました
                 st.error(f"問題の準備に失敗しちゃった。エラー詳細: {e}")
 
     # --- 作成されたクイズの表示と回答処理 ---
@@ -488,7 +483,7 @@ elif "🎯 クイズ道場" in page:
                 st.error(f"残念！正解は「{correct_answer}」でした。")
             
             st.info("📝 **解説**\n\n" + q_data.get("explanation", ""))
-                        
+                                    
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
