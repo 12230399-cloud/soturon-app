@@ -404,10 +404,11 @@ elif "🎯 クイズ道場" in page:
         st.session_state.ai_quiz_data = None
     if "ai_quiz_answered" not in st.session_state:
         st.session_state.ai_quiz_answered = False
-
+    if "user_choice" not in st.session_state:
+        st.session_state.user_choice = None
     if "grade" not in st.session_state:
         st.session_state.grade = "小学3年生"
-        
+
     st.markdown("### 🏫 挑戦する学年")
     selected_grade = st.selectbox(
         "学年を選んでね：", 
@@ -416,40 +417,45 @@ elif "🎯 クイズ道場" in page:
     )
     st.session_state.grade = selected_grade
 
-    # --- まだクイズが作成されていない場合の画面 ---
+    # -----------------------------------------------------------
+    # 新しい問題を作成する機能（関数としてまとめました）
+    # -----------------------------------------------------------
+    def fetch_new_quiz():
+        with st.spinner("問題を作成中..."):
+            try:
+                prompt = f"""
+                {st.session_state.grade}向けの理科の4択クイズを1問作成してください。
+                必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
+                {{
+                    "question": "問題文",
+                    "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+                    "answer": "正解の選択肢の文字列（choicesの中の1つと完全一致させること）",
+                    "explanation": "{st.session_state.grade}にわかりやすい言葉と漢字で書かれた解説"
+                }}
+                """
+                
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7 
+                )
+                
+                ai_text = response.choices[0].message.content.strip()
+                if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
+                elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
+                
+                st.session_state.ai_quiz_data = json.loads(ai_text)
+                st.session_state.ai_quiz_answered = False
+                st.session_state.user_choice = None
+                
+            except Exception as e:
+                st.error(f"問題の作成に失敗しました。エラー詳細: {e}")
+
+    # --- まだクイズが1問も作成されていない場合のスタート画面 ---
     if not st.session_state.ai_quiz_data:
         if st.button("クイズに挑戦する", use_container_width=True):
-            with st.spinner("問題を作成中..."):
-                try:
-                    prompt = f"""
-                    {selected_grade}向けの理科の4択クイズを1問作成してください。
-                    必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
-                    {{
-                        "question": "問題文",
-                        "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-                        "answer": "正解の選択肢の文字列（choicesの中の1つと完全一致させること）",
-                        "explanation": "{selected_grade}にわかりやすい言葉と漢字で書かれた解説"
-                    }}
-                    """
-                    
-                    response = client.chat.completions.create(
-                        model="gpt-4o-mini",
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.7 
-                    )
-                    
-                    ai_text = response.choices[0].message.content.strip()
-                    
-                    if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
-                    elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
-                    
-                    st.session_state.ai_quiz_data = json.loads(ai_text)
-                    st.session_state.ai_quiz_answered = False
-                    
-                    st.rerun() 
-                    
-                except Exception as e:
-                    st.error(f"問題の作成に失敗しました。エラー詳細: {e}")
+            fetch_new_quiz()
+            st.rerun()
 
     # --- 作成されたクイズの表示と回答処理 ---
     if st.session_state.ai_quiz_data:
@@ -458,25 +464,27 @@ elif "🎯 クイズ道場" in page:
         st.caption(f"難易度: {selected_grade}")
         st.markdown(f"### Q. {q_data.get('question', '')}")
         
-        user_choice = st.radio(
-            "答え:", 
-            q_data.get("choices", []), 
-            disabled=st.session_state.ai_quiz_answered, 
-            index=None
-        )
-        
-        # 回答ボタン
+        # --- 【UI改善】選択肢を2列のボタンに変更（1タップで回答） ---
         if not st.session_state.ai_quiz_answered:
-            if st.button("答える"):
-                if user_choice:
+            st.write("答えを選んでね:")
+            choices = q_data.get("choices", [])
+            
+            col1, col2 = st.columns(2)
+            for i, choice in enumerate(choices):
+                # 偶数番目は左列(col1)、奇数番目は右列(col2)に配置
+                col = col1 if i % 2 == 0 else col2
+                # ボタンを押した瞬間に回答として記録し、結果画面へ！
+                if col.button(choice, use_container_width=True):
+                    st.session_state.user_choice = choice
                     st.session_state.ai_quiz_answered = True
                     st.rerun()
-                else:
-                    st.warning("選択肢を選んでください。")
-        
-        # 結果と解説の表示
+                    
+        # --- 結果と解説の表示 ---
         if st.session_state.ai_quiz_answered:
             correct_answer = q_data.get("answer", "")
+            user_choice = st.session_state.user_choice
+            
+            st.write(f"あなたの回答: **{user_choice}**")
             
             if user_choice == correct_answer:
                 st.success("🎉 正解！")
@@ -485,15 +493,13 @@ elif "🎯 クイズ道場" in page:
             
             st.info(f"**解説**\n\n{q_data.get('explanation', '')}")
             
-            st.write("") # 少し余白を空ける
+            st.write("") 
             
-            # --- 次の問題へ行くボタン ---
+            # --- 【改善】「次の問題へ」を押すと、すぐに裏側で新問題を作成 ---
             if st.button("次の問題へ", type="primary", use_container_width=True):
-                # クイズデータをリセットして最初の状態に戻す
-                st.session_state.ai_quiz_data = None
-                st.session_state.ai_quiz_answered = False
+                fetch_new_quiz()
                 st.rerun()
-                                                    
+                                                                    
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
