@@ -379,7 +379,29 @@ elif "🎯 クイズ道場" in page:
     st.markdown("<div class='quiz-card'>ここでは、キミの学年にぴったりの理科クイズに挑戦できるよ！全問正解めざしてがんばろう！</div>", unsafe_allow_html=True)
     
     import json
+    import os
     
+    # -----------------------------------------------------------
+    # 【重要】AIを確実に動かすための設定
+    # ※クイズ画面専用にOpenAIの準備を行います
+    # -----------------------------------------------------------
+    from openai import OpenAI
+    
+    try:
+        # APIキーを安全に読み込みます（お使いの環境に合わせて自動で探します）
+        if "OPENAI_API_KEY" in st.secrets:
+            api_key = st.secrets["OPENAI_API_KEY"]
+        elif "OPENAI_API_KEY" in os.environ:
+            api_key = os.environ["OPENAI_API_KEY"]
+        else:
+            # ⚠️上の2つを使っていない場合は、ここの文字をAPIキーに書き換えてください！
+            api_key = "sk-ここにあなたのAPIキーを貼り付けてください"
+            
+        client = OpenAI(api_key=api_key)
+    except Exception as e:
+        st.error("APIキーの準備でエラーが起きました。コードの設定を確認してください。")
+    # -----------------------------------------------------------
+
     # セッションステートの初期化
     if "ai_quiz_data" not in st.session_state:
         st.session_state.ai_quiz_data = None
@@ -399,7 +421,6 @@ elif "🎯 クイズ道場" in page:
 
     # --- クイズを出題するボタン（裏側でAIが動く） ---
     if st.button("🗡️ 新しい問題に挑戦する！", use_container_width=True):
-        # ユーザーには「問題を準備中」とだけ見せる
         with st.spinner("新しい問題を準備中... しばらく待ってね！ぐるぐる...🤔"):
             try:
                 # 裏側でAIが問題を生成
@@ -416,7 +437,7 @@ elif "🎯 クイズ道場" in page:
                 
                 # APIリクエスト
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo", # または gpt-4o-mini など
+                    model="gpt-3.5-turbo", # GPT-4o-mini等を使っている場合は変更してください
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.7 
                 )
@@ -432,7 +453,8 @@ elif "🎯 クイズ道場" in page:
                 st.rerun() 
                 
             except Exception as e:
-                st.error("問題の準備に失敗しちゃった。もう一度「挑戦する」を押してみてね！")
+                # 万が一エラーが出た場合、何が原因か画面に表示するようにしました
+                st.error(f"問題の準備に失敗しちゃった。エラー詳細: {e}")
 
     # --- 作成されたクイズの表示と回答処理 ---
     if st.session_state.ai_quiz_data:
@@ -462,13 +484,11 @@ elif "🎯 クイズ道場" in page:
             
             if user_choice == correct_answer:
                 st.success("🎉 大正解！！すごい！")
-                # 例: update_quiz_stats(st.session_state.user_name, True)
             else:
                 st.error(f"残念！正解は「{correct_answer}」でした。")
-                # 例: update_quiz_stats(st.session_state.user_name, False)
             
             st.info("📝 **解説**\n\n" + q_data.get("explanation", ""))
-            
+                        
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
