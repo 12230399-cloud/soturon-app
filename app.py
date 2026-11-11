@@ -25,6 +25,7 @@ st.set_page_config(
 
 # Secrets または環境変数からAPIキーを取得
 API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
+ADMIN_PW = st.secrets.get("ADMIN_PASSWORD", "admin")
 
 STATS_FILE = "user_stats.csv"
 STREAK_FILE = "user_streaks.json"
@@ -146,13 +147,8 @@ def generate_quiz(api_key, grade_name, model_name):
         client = openai.OpenAI(api_key=api_key)
         res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
         data = json.loads(res.choices[0].message.content)
-        
-        if "quiz" in data and isinstance(data["quiz"], dict):
-            data = data["quiz"]
-            
-        if "question" not in data or "choices" not in data or "correct_index" not in data:
-            return None 
-            
+        if "quiz" in data and isinstance(data["quiz"], dict): data = data["quiz"]
+        if "question" not in data or "choices" not in data or "correct_index" not in data: return None 
         return data
     except Exception: return None
 
@@ -185,6 +181,7 @@ if "content_date_grade" not in st.session_state: st.session_state.content_date_g
 if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
 if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
 if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
+if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 
 def create_new_thread(system_prompt, grade_name):
     new_id = str(uuid.uuid4())
@@ -213,11 +210,9 @@ if not st.session_state.user_name.strip():
     st.info("""
     **🔰 はじめての方へ（使い方）**
     このアプリは、AIの「探検ハカセ」と一緒に理科のふしぎを学ぶアプリです。
-    
     1. **おなまえと学年** を入れてスタート！
     2. **チャット** でハカセに質問してみよう。
     3. **クイズ道場** で自分の知識をためそう。
-    4. **学習きろく** で自分の成長をチェックできるよ！
     """)
 
     st.markdown('<div class="user-card">', unsafe_allow_html=True)
@@ -252,22 +247,6 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.title("🧭 メニュー")
-    
-    with st.expander("🔰 はじめての方へ（使い方）"):
-        st.markdown("""
-        **① 学年とハカセの性格をえらぼう**
-        自分に合った学年と、好きなハカセの性格を選んでね。
-        
-        **② ハカセとお話ししよう！**
-        ふしぎに思ったことをチャットで何でも質問してみよう。
-        
-        **③ クイズ道場でうでだめし！**
-        「🎯 クイズ道場」では、学用に合わせた理科の4択クイズに挑戦できるよ。
-        
-        **④ 学習きろくをチェック！**
-        「📊 学習きろく」で、これまでの入力文字数やタイピングの速さ、クイズの正解数を確認して成長を実感しよう！
-        """)
-
     selected_grade = st.selectbox("学年を変える", GRADE_OPTIONS, index=GRADE_OPTIONS.index(st.session_state.selected_grade))
     selected_persona = st.selectbox("ハカセの性格", PERSONA_OPTIONS, index=PERSONA_OPTIONS.index(st.session_state.selected_persona))
     
@@ -283,7 +262,7 @@ with st.sidebar:
 
     active_prompt = get_system_prompt(st.session_state.selected_grade, st.session_state.selected_persona)
     st.divider()
-    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場", "📊 学習きろく"])
+    page = st.radio("ページ選択", ["💬 チャット", "🎯 クイズ道場", "📊 学習きろく", "👑 管理者画面"])
 
     if "threads" not in st.session_state:
         init_id, init_thread = create_new_thread(active_prompt, st.session_state.selected_grade)
@@ -306,7 +285,7 @@ with st.sidebar:
     selected_model = st.selectbox("🧠 AIモデル", ["gpt-4o", "gpt-4o-mini"], index=1)
 
 # ==========================================
-# 6. メイン機能（チャット / クイズ / きろく）
+# 6. メイン機能
 # ==========================================
 if "チャット" in page:
     current_thread = st.session_state.threads[st.session_state.current_thread_id]
@@ -358,8 +337,7 @@ if "チャット" in page:
         st.session_state.auto_send_msg = None
 
     if user_input:
-        if not API_KEY: 
-            st.error("⚠️ システムエラー：APIキーが設定されていません。管理者に連絡してください。")
+        if not API_KEY: st.error("⚠️ システムエラー：APIキーが設定されていません。")
         else:
             current_time = time.time()
             elapsed = current_time - st.session_state.last_send_time
@@ -390,7 +368,6 @@ if "チャット" in page:
                     st.markdown(display_reply)
 
             current_thread["messages"].append({"role": "assistant", "content": reply})
-            
             if "---" in reply:
                 qs_text = reply.split("---")[1].strip()
                 st.session_state.suggested_questions = [line.strip().lstrip('1234567890.-* []') for line in qs_text.split('\n') if line.strip() and (line.strip()[0].isdigit() or line.startswith('-') or line.startswith('*'))]
@@ -407,16 +384,13 @@ elif "🎯 クイズ道場" in page:
     qc3.metric("正答率", f"{accuracy:.1f} %")
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    if not API_KEY: 
-        st.error("⚠️ システムエラー：APIキーが設定されていません。管理者に連絡してください。")
+    if not API_KEY: st.error("⚠️ システムエラー：APIキーが設定されていません。")
     else:
         if st.session_state.quiz_data is None:
             if st.button("✨ 新しいクイズを出題する！", type="primary"):
                 with st.spinner("クイズ作成中..."):
                     new_quiz = generate_quiz(API_KEY, st.session_state.selected_grade, selected_model)
-                    if new_quiz is None:
-                        st.error("⚠️ AIがクイズの作成に失敗しました。もう一度ボタンを押してください！")
-                    else:
+                    if new_quiz:
                         st.session_state.quiz_data = new_quiz
                         st.session_state.quiz_answered = False
                         st.rerun()
@@ -438,7 +412,6 @@ elif "🎯 クイズ道場" in page:
                 else: st.error(f"❌ ざんねん！ 正解は: {q_data['choices'][q_data['correct_index']]}")
                 st.info(f"💡 【解説】\n{q_data['explanation']}")
                 
-                st.markdown("<br>", unsafe_allow_html=True)
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("⏭️ 次の問題へ", type="primary", use_container_width=True):
@@ -447,9 +420,6 @@ elif "🎯 クイズ道場" in page:
                             if next_quiz:
                                 st.session_state.quiz_data = next_quiz
                                 st.session_state.quiz_answered = False
-                            else:
-                                st.error("⚠️ クイズの作成に失敗しました。")
-                                st.session_state.quiz_data = None
                             st.rerun()
                 with col2:
                     if st.button("🛑 やめる", use_container_width=True):
@@ -458,9 +428,6 @@ elif "🎯 クイズ道場" in page:
 
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
-    st.write(f"**{st.session_state.user_name}** さんのこれまでの探検のきろくだよ！")
-
-    st.subheader("🎯 クイズの成績")
     q_stats = get_quiz_stats(st.session_state.user_name)
     accuracy = (q_stats['correct'] / q_stats['total'] * 100) if q_stats['total'] > 0 else 0
     qc1, qc2, qc3, qc4 = st.columns(4)
@@ -469,22 +436,86 @@ elif "📊 学習きろく" in page:
     qc3.metric("正答率", f"{accuracy:.1f} %")
     qc4.metric("連続正解", f"{q_stats['streak']} 問")
 
-    st.subheader("💬 チャットのきろく")
     if os.path.exists(STATS_FILE):
         df = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
         user_df = df[df['user_name'] == st.session_state.user_name]
-        
         if not user_df.empty:
             total_chars = user_df['char_count'].sum()
             avg_speed = user_df['typing_speed'].mean()
-            
             sc1, sc2 = st.columns(2)
-            sc1.metric("入力した文字の数（合計）", f"{total_chars} 文字")
-            sc2.metric("タイピングの速さ（平均）", f"{avg_speed:.1f} 文字/分")
-            
-            st.markdown("<br>▼ **最近のしつもん**", unsafe_allow_html=True)
+            sc1.metric("入力文字数（合計）", f"{total_chars} 文字")
+            sc2.metric("タイピング速度（平均）", f"{avg_speed:.1f} 文字/分")
             st.dataframe(user_df[['timestamp', 'user_message']].tail(10), use_container_width=True, hide_index=True)
-        else:
-            st.info("まだチャットのきろくがないみたい。ハカセに質問してみよう！")
+        else: st.info("チャットのきろくがないみたい。ハカセに質問してみよう！")
+    else: st.info("きろくファイルがありません。チャットを始めると記録されます。")
+
+elif "👑 管理者画面" in page:
+    st.title("👑 管理者専用ダッシュボード")
+    
+    if not st.session_state.admin_auth:
+        st.info("先生・研究者向けの管理画面です。パスワードを入力してください。")
+        pw = st.text_input("パスワード (デフォルト: admin)", type="password")
+        if st.button("ログイン"):
+            if pw == ADMIN_PW:
+                st.session_state.admin_auth = True
+                st.rerun()
+            else:
+                st.error("パスワードが違います。")
     else:
-        st.info("まだきろくファイルがないよ。チャットを始めるとここに記録が残ります。")
+        if st.button("🚪 ログアウト", key="logout_btn"):
+            st.session_state.admin_auth = False
+            st.rerun()
+
+        tab1, tab2, tab3 = st.tabs(["📝 チャットログ", "🎯 クイズ成績", "⚙️ データ管理"])
+
+        with tab1:
+            st.subheader("ユーザー別 チャット利用状況")
+            if os.path.exists(STATS_FILE):
+                df_chat = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
+                if not df_chat.empty:
+                    char_counts = df_chat.groupby("user_name")["char_count"].sum()
+                    st.markdown("##### 📊 合計入力文字数")
+                    st.bar_chart(char_counts)
+                st.dataframe(df_chat, use_container_width=True)
+                with open(STATS_FILE, "rb") as f:
+                    st.download_button("📥 チャットログ(CSV)をダウンロード", f, file_name="user_stats.csv", mime="text/csv")
+            else: st.write("まだチャットの記録がありません。")
+
+        with tab2:
+            st.subheader("ユーザー別 クイズ成績")
+            if os.path.exists(QUIZ_STATS_FILE):
+                q_data = load_json(QUIZ_STATS_FILE)
+                if q_data:
+                    df_quiz = pd.DataFrame.from_dict(q_data, orient='index')
+                    st.markdown("##### 📊 正解数 / 挑戦回数")
+                    if 'correct' in df_quiz.columns and 'total' in df_quiz.columns:
+                        st.bar_chart(df_quiz[['correct', 'total']])
+                    st.dataframe(df_quiz, use_container_width=True)
+                else: st.write("データが空です。")
+            else: st.write("まだクイズの記録がありません。")
+
+        with tab3:
+            st.subheader("⚙️ データリセット操作")
+            st.warning("⚠️ ボタンを押すと研究データが消去されます。")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("🗑️ チャットログを全消去", use_container_width=True):
+                    if os.path.exists(STATS_FILE):
+                        os.remove(STATS_FILE)
+                        st.success("チャットログを消去しました。")
+                        time.sleep(1)
+                        st.rerun()
+            with col2:
+                if st.button("🗑️ クイズ成績を全消去", use_container_width=True):
+                    if os.path.exists(QUIZ_STATS_FILE):
+                        os.remove(QUIZ_STATS_FILE)
+                        st.success("クイズ成績を消去しました。")
+                        time.sleep(1)
+                        st.rerun()
+            with col3:
+                if st.button("🗑️ ログイン記録を全消去", use_container_width=True):
+                    if os.path.exists(STREAK_FILE):
+                        os.remove(STREAK_FILE)
+                        st.success("連続ログイン記録を消去しました。")
+                        time.sleep(1)
+                        st.rerun()
