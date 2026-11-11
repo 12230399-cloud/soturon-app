@@ -376,7 +376,7 @@ if "チャット" in page:
 
 elif "🎯 クイズ道場" in page:
     st.title("🎯 クイズ道場")
-    st.markdown("<div class='quiz-card'>ここでは、キミの学年にぴったりの理科クイズに挑戦できるよ！全問正解めざしてがんばろう！</div>", unsafe_allow_html=True)
+    st.write("キミの学年にぴったりの理科クイズに挑戦しよう！")
     
     import json
     import os
@@ -408,7 +408,7 @@ elif "🎯 クイズ道場" in page:
     if "grade" not in st.session_state:
         st.session_state.grade = "小学3年生"
         
-    st.markdown("##### 🏫 挑戦するレベル")
+    st.markdown("### 🏫 挑戦する学年")
     selected_grade = st.selectbox(
         "学年を選んでね：", 
         ["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"],
@@ -416,74 +416,84 @@ elif "🎯 クイズ道場" in page:
     )
     st.session_state.grade = selected_grade
 
-    # --- クイズを出題するボタン（裏側でAIが動く） ---
-    if st.button("🗡️ 新しい問題に挑戦する！", use_container_width=True):
-        with st.spinner("新しい問題を準備中... しばらく待ってね！ぐるぐる...🤔"):
-            try:
-                prompt = f"""
-                {selected_grade}向けの理科の4択クイズを1問作成してください。
-                必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
-                {{
-                    "question": "問題文",
-                    "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
-                    "answer": "正解の選択肢の文字列（choicesの中の1つと完全一致させること）",
-                    "explanation": "{selected_grade}にわかりやすい言葉と漢字で書かれた解説"
-                }}
-                """
-                
-                # APIリクエスト (モデルを gpt-4o-mini に変更しました！)
-                response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7 
-                )
-                
-                ai_text = response.choices[0].message.content.strip()
-                
-                if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
-                elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
-                
-                st.session_state.ai_quiz_data = json.loads(ai_text)
-                st.session_state.ai_quiz_answered = False
-                
-                st.rerun() 
-                
-            except Exception as e:
-                st.error(f"問題の準備に失敗しちゃった。エラー詳細: {e}")
+    # --- まだクイズが作成されていない場合の画面 ---
+    if not st.session_state.ai_quiz_data:
+        if st.button("クイズに挑戦する", use_container_width=True):
+            with st.spinner("問題を作成中..."):
+                try:
+                    prompt = f"""
+                    {selected_grade}向けの理科の4択クイズを1問作成してください。
+                    必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
+                    {{
+                        "question": "問題文",
+                        "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"],
+                        "answer": "正解の選択肢の文字列（choicesの中の1つと完全一致させること）",
+                        "explanation": "{selected_grade}にわかりやすい言葉と漢字で書かれた解説"
+                    }}
+                    """
+                    
+                    response = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7 
+                    )
+                    
+                    ai_text = response.choices[0].message.content.strip()
+                    
+                    if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
+                    elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
+                    
+                    st.session_state.ai_quiz_data = json.loads(ai_text)
+                    st.session_state.ai_quiz_answered = False
+                    
+                    st.rerun() 
+                    
+                except Exception as e:
+                    st.error(f"問題の作成に失敗しました。エラー詳細: {e}")
 
     # --- 作成されたクイズの表示と回答処理 ---
     if st.session_state.ai_quiz_data:
-        st.markdown("---")
         q_data = st.session_state.ai_quiz_data
         
-        st.caption(f"難易度: {selected_grade} レベル")
+        st.caption(f"難易度: {selected_grade}")
         st.markdown(f"### Q. {q_data.get('question', '')}")
         
         user_choice = st.radio(
-            "答えを選んでね:", 
+            "答え:", 
             q_data.get("choices", []), 
             disabled=st.session_state.ai_quiz_answered, 
             index=None
         )
         
+        # 回答ボタン
         if not st.session_state.ai_quiz_answered:
-            if st.button("🚀 答える！"):
+            if st.button("答える"):
                 if user_choice:
                     st.session_state.ai_quiz_answered = True
                     st.rerun()
                 else:
-                    st.warning("選択肢を選んでから「答える！」を押してね。")
+                    st.warning("選択肢を選んでください。")
         
+        # 結果と解説の表示
         if st.session_state.ai_quiz_answered:
             correct_answer = q_data.get("answer", "")
             
             if user_choice == correct_answer:
-                st.success("🎉 大正解！！すごい！")
+                st.success("🎉 正解！")
             else:
                 st.error(f"残念！正解は「{correct_answer}」でした。")
             
-            st.info("📝 **解説**\n\n" + q_data.get("explanation", ""))
-                                    
+            st.info(f"**解説**\n\n{q_data.get('explanation', '')}")
+            
+            st.write("") # 少し余白を空ける
+            
+            # --- 次の問題へ行くボタン ---
+            if st.button("次の問題へ", type="primary", use_container_width=True):
+                # クイズデータをリセットして最初の状態に戻す
+                st.session_state.ai_quiz_data = None
+                st.session_state.ai_quiz_answered = False
+                st.rerun()
+                                                    
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
