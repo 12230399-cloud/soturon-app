@@ -528,10 +528,10 @@ elif "👑 管理者画面" in page:
     
     if not st.session_state.admin_auth:
         st.info("先生・研究者向けの管理画面です。パスワードを入力してください。")
-        password = st.text_input("管理者パスワードを入力してください")
+        password = st.text_input("管理者パスワードを入力してください", type="password")
         
         if st.button("ログイン"):
-            if password == ADMIN_PW:
+            if password == ADMIN_PW = "soturon1682"
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
