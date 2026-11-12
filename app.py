@@ -25,7 +25,7 @@ st.set_page_config(
 
 # Secrets または環境変数からAPIキーを取得
 API_KEY = st.secrets.get("OPENAI_API_KEY", os.environ.get("OPENAI_API_KEY", ""))
-ADMIN_PW = st.secrets.get("ADMIN_PASSWORD", "admin")
+ADMIN_PW = st.secrets.get("ADMIN_PASSWORD", "soturon1682")
 
 STATS_FILE = "user_stats.csv"
 STREAK_FILE = "user_streaks.json"
@@ -138,20 +138,6 @@ def generate_daily_content(api_key, grade_name, model_name, seed_date):
         return json.loads(res.choices[0].message.content)
     except Exception: return None
 
-def generate_quiz(api_key, grade_name, model_name):
-    exact_grade = clean_grade_name(grade_name)
-    random_topic = random.choice(["動物のふしぎ", "植物のそだち", "宇宙と星", "天気と気象", "力と運動", "電気と磁気", "身近な化学", "地球の歴史", "人体と健康"])
-    system_prompt = f"""あなたは専門教師です。{exact_grade}向けの理科4択クイズ（テーマ: {random_topic}）をJSONで出力してください。必ず以下の構成の「単一のJSONオブジェクト」にしてください（"quiz"などのキーで囲まないこと）。
-{{ "question": "問題文", "choices": ["選択肢1", "選択肢2", "選択肢3", "選択肢4"], "correct_index": 0, "explanation": "解説" }}"""
-    try:
-        client = openai.OpenAI(api_key=api_key)
-        res = client.chat.completions.create(model=model_name, messages=[{"role": "system", "content": system_prompt}], response_format={"type": "json_object"}, temperature=0.8)
-        data = json.loads(res.choices[0].message.content)
-        if "quiz" in data and isinstance(data["quiz"], dict): data = data["quiz"]
-        if "question" not in data or "choices" not in data or "correct_index" not in data: return None 
-        return data
-    except Exception: return None
-
 def get_system_prompt(grade_name, persona_name):
     exact_grade = clean_grade_name(grade_name)
     persona_instruction = "親しみやすく丁寧な口調で話してください。"
@@ -178,9 +164,6 @@ if "suggested_questions" not in st.session_state: st.session_state.suggested_que
 if "auto_send_msg" not in st.session_state: st.session_state.auto_send_msg = None
 if "daily_content" not in st.session_state: st.session_state.daily_content = None
 if "content_date_grade" not in st.session_state: st.session_state.content_date_grade = ""
-if "quiz_data" not in st.session_state: st.session_state.quiz_data = None
-if "quiz_answered" not in st.session_state: st.session_state.quiz_answered = False
-if "quiz_selected" not in st.session_state: st.session_state.quiz_selected = None
 if "admin_auth" not in st.session_state: st.session_state.admin_auth = False
 
 def create_new_thread(system_prompt, grade_name):
@@ -378,26 +361,11 @@ elif "🎯 クイズ道場" in page:
     st.title("🎯 クイズ道場")
     st.write("キミの学年にぴったりの理科クイズに挑戦しよう！")
     
-    import json
-    import os
-    from openai import OpenAI
-    
-    # -----------------------------------------------------------
-    # 【重要】APIキーの設定
-    # -----------------------------------------------------------
-    try:
-        if "OPENAI_API_KEY" in st.secrets:
-            api_key = st.secrets["OPENAI_API_KEY"]
-        elif "OPENAI_API_KEY" in os.environ:
-            api_key = os.environ["OPENAI_API_KEY"]
-        else:
-            # ⚠️ ここにあなたのAPIキーを貼り付けてください
-            api_key = "sk-ここにあなたのAPIキーを貼り付けてください"
-            
-        client = OpenAI(api_key=api_key)
-    except Exception as e:
-        st.error("APIキーの準備でエラーが起きました。コードの設定を確認してください。")
-    # -----------------------------------------------------------
+    if not API_KEY:
+        st.error("⚠️ システムエラー：APIキーが設定されていません。")
+        st.stop()
+        
+    client = openai.OpenAI(api_key=API_KEY)
 
     # セッションステートの初期化
     if "ai_quiz_data" not in st.session_state:
@@ -410,16 +378,13 @@ elif "🎯 クイズ道場" in page:
         st.session_state.grade = "小学3年生"
 
     st.markdown("### 🏫 挑戦する学年")
-    selected_grade = st.selectbox(
+    selected_quiz_grade = st.selectbox(
         "学年を選んでね：", 
         ["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"],
         index=["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"].index(st.session_state.grade)
     )
-    st.session_state.grade = selected_grade
+    st.session_state.grade = selected_quiz_grade
 
-    # -----------------------------------------------------------
-    # 新しい問題を作成する機能（関数としてまとめました）
-    # -----------------------------------------------------------
     def fetch_new_quiz():
         with st.spinner("問題を作成中..."):
             try:
@@ -451,32 +416,35 @@ elif "🎯 クイズ道場" in page:
             except Exception as e:
                 st.error(f"問題の作成に失敗しました。エラー詳細: {e}")
 
-    # --- まだクイズが1問も作成されていない場合のスタート画面 ---
+    # --- スタート画面 ---
     if not st.session_state.ai_quiz_data:
         if st.button("クイズに挑戦する", use_container_width=True):
             fetch_new_quiz()
             st.rerun()
 
-    # --- 作成されたクイズの表示と回答処理 ---
+    # --- クイズ表示と回答処理 ---
     if st.session_state.ai_quiz_data:
         q_data = st.session_state.ai_quiz_data
         
-        st.caption(f"難易度: {selected_grade}")
+        st.caption(f"難易度: {selected_quiz_grade}")
         st.markdown(f"### Q. {q_data.get('question', '')}")
         
-        # --- 【UI改善】選択肢を2列のボタンに変更（1タップで回答） ---
         if not st.session_state.ai_quiz_answered:
             st.write("答えを選んでね:")
             choices = q_data.get("choices", [])
             
             col1, col2 = st.columns(2)
             for i, choice in enumerate(choices):
-                # 偶数番目は左列(col1)、奇数番目は右列(col2)に配置
                 col = col1 if i % 2 == 0 else col2
-                # ボタンを押した瞬間に回答として記録し、結果画面へ！
                 if col.button(choice, use_container_width=True):
                     st.session_state.user_choice = choice
                     st.session_state.ai_quiz_answered = True
+                    
+                    # 正解・不正解を判定してファイルに保存
+                    correct_answer = q_data.get("answer", "")
+                    is_correct = (choice == correct_answer)
+                    update_quiz_stats(st.session_state.user_name, is_correct)
+                    
                     st.rerun()
                     
         # --- 結果と解説の表示 ---
@@ -492,10 +460,8 @@ elif "🎯 クイズ道場" in page:
                 st.error(f"残念！正解は「{correct_answer}」でした。")
             
             st.info(f"**解説**\n\n{q_data.get('explanation', '')}")
-            
             st.write("") 
             
-            # --- 【改善】「次の問題へ」を押すと、すぐに裏側で新問題を作成 ---
             if st.button("次の問題へ", type="primary", use_container_width=True):
                 fetch_new_quiz()
                 st.rerun()
@@ -531,8 +497,7 @@ elif "👑 管理者画面" in page:
         password = st.text_input("管理者パスワード", type="password")
         
         if st.button("ログイン"):
-            # 💡 パスワードをここで直接指定します
-            if password == "soturon1682":
+            if password == ADMIN_PW:
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
@@ -549,7 +514,6 @@ elif "👑 管理者画面" in page:
             if os.path.exists(STATS_FILE):
                 df_chat = pd.read_csv(STATS_FILE, encoding="utf-8-sig")
                 if not df_chat.empty:
-                    # 全体のグラフ
                     char_counts = df_chat.groupby("user_name")["char_count"].sum()
                     st.markdown("##### 📊 合計入力文字数")
                     st.bar_chart(char_counts)
@@ -557,17 +521,14 @@ elif "👑 管理者画面" in page:
                     st.markdown("---")
                     st.markdown("##### 🔍 履歴の絞り込み")
                     
-                    # 記録されているユーザー名の一覧を作成（「すべて」を先頭に追加）
                     user_list = ["すべて"] + list(df_chat["user_name"].dropna().unique())
                     selected_user = st.selectbox("確認したいユーザーを選んでください", user_list)
                     
-                    # 選択したユーザーに合わせてデータを絞り込む
                     if selected_user == "すべて":
                         filtered_df = df_chat
                     else:
                         filtered_df = df_chat[df_chat["user_name"] == selected_user]
                         
-                    # 絞り込んだ結果を表示
                     st.dataframe(filtered_df, use_container_width=True)
                     
                 with open(STATS_FILE, "rb") as f:
