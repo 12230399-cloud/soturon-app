@@ -528,10 +528,11 @@ elif "👑 管理者画面" in page:
     
     if not st.session_state.admin_auth:
         st.info("先生・研究者向けの管理画面です。パスワードを入力してください。")
-        password = st.text_input("管理者パスワードを入力してください", type="password")
+        password = st.text_input("管理者パスワード", type="password")
         
         if st.button("ログイン"):
-            if password == ADMIN_PW = "soturon1682"
+            # 💡 パスワードをここで直接指定します
+            if password == "soturon1682":
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
@@ -540,7 +541,7 @@ elif "👑 管理者画面" in page:
         if st.button("🚪 ログアウト", key="logout_btn"):
             st.session_state.admin_auth = False
             st.rerun()
-
+            
         tab1, tab2, tab3 = st.tabs(["📝 チャットログ", "🎯 クイズ成績", "⚙️ データ管理"])
 
         with tab1:
