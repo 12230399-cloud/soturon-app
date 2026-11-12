@@ -30,9 +30,9 @@ st.title("👑 管理者専用ダッシュボード")
 
 if not st.session_state.admin_auth:
     st.info("先生・研究者向けの管理画面です。パスワードを入力してください。")
-    pw = st.text_input("パスワード (デフォルト: admin)", type="password")
+    pw = st.text_input("パスワード ", type="password")
     if st.button("ログイン"):
-        if pw == ADMIN_PW:
+        if pw == soturon1682 :
             st.session_state.admin_auth = True
             st.rerun()
         else:
