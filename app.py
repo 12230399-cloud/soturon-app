@@ -367,6 +367,14 @@ elif "🎯 クイズ道場" in page:
         
     client = openai.OpenAI(api_key=API_KEY)
 
+    # 【修正1】高校生・大人まで選べるように拡張
+    QUIZ_GRADES = [
+        "小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生",
+        "中学1年生", "中学2年生", "中学3年生",
+        "高校1年生", "高校2年生", "高校3年生",
+        "大人・一般"
+    ]
+
     # セッションステートの初期化
     if "ai_quiz_data" not in st.session_state:
         st.session_state.ai_quiz_data = None
@@ -374,22 +382,42 @@ elif "🎯 クイズ道場" in page:
         st.session_state.ai_quiz_answered = False
     if "user_choice" not in st.session_state:
         st.session_state.user_choice = None
-    if "grade" not in st.session_state:
+    if "grade" not in st.session_state or st.session_state.grade not in QUIZ_GRADES:
         st.session_state.grade = "小学3年生"
+    if "past_questions" not in st.session_state:
+        st.session_state.past_questions = []
 
     st.markdown("### 🏫 挑戦する学年")
     selected_quiz_grade = st.selectbox(
         "学年を選んでね：", 
-        ["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"],
-        index=["小学1年生", "小学2年生", "小学3年生", "小学4年生", "小学5年生", "小学6年生", "中学生"].index(st.session_state.grade)
+        QUIZ_GRADES,
+        index=QUIZ_GRADES.index(st.session_state.grade)
     )
     st.session_state.grade = selected_quiz_grade
 
     def fetch_new_quiz():
         with st.spinner("問題を作成中..."):
             try:
+                # 【修正2】毎回ランダムな分野・テーマを指定して問題の重複を防ぐ
+                topics = [
+                    "動物の生態と体のつくり", "植物の成長と光合成", "宇宙・惑星・星座",
+                    "天気・雲・気象現象", "力・運動・エネルギー", "電気・磁石・電流",
+                    "身近な化学変化・水溶液・気体", "地球の歴史・地層・火山・地震",
+                    "人体のしくみと健康", "音と光の性質", "環境問題と自然のつながり"
+                ]
+                chosen_topic = random.choice(topics)
+                seed_num = random.randint(1, 99999)
+                recent_qs = " / ".join(st.session_state.past_questions[-5:])
+
                 prompt = f"""
-                {st.session_state.grade}向けの理科の4択クイズを1問作成してください。
+                あなたは理科の専門教師です。
+                【対象学年】{st.session_state.grade}
+                【出題テーマ】{chosen_topic}（ランダムシード: {seed_num}）
+                
+                上記の対象学年と出題テーマに合った理科の4択クイズを1問作成してください。
+                ※重要：以下の過去に出題した問題とは全く異なる新しい切り口の問題にしてください。
+                過去の問題：{recent_qs}
+
                 必ず以下のJSON形式のみで出力してください。Markdownのコードブロック(```json 等)は付けないでください。
                 {{
                     "question": "問題文",
@@ -402,14 +430,16 @@ elif "🎯 クイズ道場" in page:
                 response = client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": prompt}],
-                    temperature=0.7 
+                    temperature=0.9
                 )
                 
                 ai_text = response.choices[0].message.content.strip()
                 if ai_text.startswith("```json"): ai_text = ai_text[7:-3].strip()
                 elif ai_text.startswith("```"): ai_text = ai_text[3:-3].strip()
                 
-                st.session_state.ai_quiz_data = json.loads(ai_text)
+                new_q_data = json.loads(ai_text)
+                st.session_state.ai_quiz_data = new_q_data
+                st.session_state.past_questions.append(new_q_data.get("question", ""))
                 st.session_state.ai_quiz_answered = False
                 st.session_state.user_choice = None
                 
@@ -440,7 +470,6 @@ elif "🎯 クイズ道場" in page:
                     st.session_state.user_choice = choice
                     st.session_state.ai_quiz_answered = True
                     
-                    # 正解・不正解を判定してファイルに保存
                     correct_answer = q_data.get("answer", "")
                     is_correct = (choice == correct_answer)
                     update_quiz_stats(st.session_state.user_name, is_correct)
@@ -465,7 +494,7 @@ elif "🎯 クイズ道場" in page:
             if st.button("次の問題へ", type="primary", use_container_width=True):
                 fetch_new_quiz()
                 st.rerun()
-                                                                    
+                                                                                    
 elif "📊 学習きろく" in page:
     st.title("📊 学習きろく")
     q_stats = get_quiz_stats(st.session_state.user_name)
